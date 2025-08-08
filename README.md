@@ -25,5 +25,5 @@ Cube Parkour is a 3D third-person platformer built with three.js.
 
 ## Licensing
 - Code: GNU GPLv3. See `LICENSE`.
-- Audio: CC-BY-NC-SA-4.0. See `LICENSE-MUSIC.txt`.
+- Audio: CC-BY-NC-SA-4.0. See `LICENSE-MUSIC`.
 When redistributing the project, you must comply with both licenses for their respective files.
