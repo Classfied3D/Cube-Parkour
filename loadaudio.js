@@ -42,7 +42,7 @@ async function audioLoad() {
 if (window.self === window.top) { // Don't play in iframe
   if (!localStorage.theme) {
     const script = document.createElement("script");
-    script.src = "/assets/audio.js";
+    script.src = "/audio/audio.js";
     script.onload = audioLoad;
     document.getElementsByTagName("body")[0].appendChild(script);
   } else {
