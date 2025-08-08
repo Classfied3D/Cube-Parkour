@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="icon" href="/assets/favicon.png" type="image/x-icon">
+    <link href="/style.css" rel="stylesheet" type="text/css">
+    
+    <title>Cube Parkour</title>
+    <meta name="author" content="Classfied3D">
+    <meta name="description" content="Cube Parkour is a 3D third-person platformer built with three.js">
+    <meta property="og:title" content="Cube Parkour">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://cube-parkour.vercel.app">
+    <meta property="og:description" content="Cube Parkour is a 3D third-person platformer built with three.js">
+    <meta property="og:image" content="/assets/preview.png">
+  </head>
+  <body>
+    <h1 id="loading" class="loading">Loading...</h1>
+    <canvas id="c"></canvas>
+    <canvas id="ctext" class="transparent"></canvas>
+    <script src="loadaudio.js"></script>
+    <script async src="https://cdn.jsdelivr.net/npm/es-module-shims@2.6.2/dist/es-module-shims.min.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.179.1/build/three.module.min.js",
+          "three/pointerlock": "https://cdn.jsdelivr.net/npm/three@0.179.1/examples/jsm/controls/PointerLockControls.js"
+        }
+      }
+    </script>
+    <script src="/script.js" type="module"></script>
+    <input type="button" class="post hidden" id="leaderboard" value="Post to leaderboard" tabindex="-1"/>
+    <p id="licence" class="licence">
+      CC BY-SA Classfied3D 2025<br/>
+      Music CC BY-NC Milo Piano 2025
+    </p>
+  </body>
+</html>
