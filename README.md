@@ -1,5 +1,3 @@
-# Cube Parkour
-
 ![Preview](assets/preview2.png)
 
 This is a reupload of a game I made in 2022 which I posted on replit (when it wasn't an AI platform), receving 2K runs, 57 likes and 100 leaderboard entries.
