@@ -1,3 +1,9 @@
+/* Copyright (C) 2025 Classfied3D
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * See LICENSE for full license text.
+ */
+
 const endpos = 66.2;
 const repeatpos = 34.3;
 let playing = false;

@@ -1,3 +1,9 @@
+/* Copyright (C) 2025 Classfied3D
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * See LICENSE for full license text.
+ */
+
 import * as THREE from "three";
 import {PointerLockControls} from "three/pointerlock";
 

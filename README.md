@@ -22,3 +22,8 @@ Cube Parkour is a 3D third-person platformer built with three.js.
 
 **Cheats:**
 * `Alt+F+4` to skip level (`Alt+4+F` on ms edge). Not to be confused with `Alt+F4`. Or just skip from the menu but this method is funny.
+
+## Licensing
+- Code: GNU GPLv3. See `LICENSE`.
+- Audio: CC-BY-NC-SA-4.0. See `LICENSE-MUSIC.txt`.
+When redistributing the project, you must comply with both licenses for their respective files.
