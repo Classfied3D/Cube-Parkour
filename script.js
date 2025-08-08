@@ -7,8 +7,10 @@ const FONT_FILE = "https://fonts.gstatic.com/s/sofiasans/v10/Yq6E-LCVXSLy9uPBwlA
 const FONT_NAME = "Sofia Sans";
 const DEBUG = false;
 
-let FPS_INTERVAL = 1000 / 60;
-let FPS_CAP = true;
+const FPS_INTERVAL = 1000 / 60;
+const FPS_CAP = true;
+
+const MAX_LEVEL = 6;
 
 let width = window.innerWidth;
 let height = window.innerHeight;
@@ -43,26 +45,30 @@ const controls = new PointerLockControls(camera, document.body);
 
 let collisions = [];
 let sightCollisions = [];
-const platforms = [];
-const movingX = [];
-const movingY = [];
-const movingZ = [];
-const trampolines = [];
-const enemies = [];
-const bosses = [];
-const rings = [];
-const lava = [];
-const unstables = [];
-const falling = [];
-const slowFalling = [];
-const keys = [];
-const lights = [];
-const playerLights = [];
-const nonSolids = [];
-const invisible = [];
-const triggers = [];
 
-function addPlatform(color, x, y, z, width, height, depth, type, invisible=false, setLighting=null) {
+const platforms = []; // regular platform
+const movingX = []; // moving platform (x-axis)
+const movingY = []; // moving platform (y-axis)
+const movingZ = []; // moving platform (z-axis)
+const trampolines = []; // trampoline (jump high)
+const enemies = []; // enemy (AI moving cube that kills you on touch. Cannot jump, slow but can use moving/falling platforms)
+const jumpingEnemies = []; // jumping enemy (AI moving cube that kills you on touch. Slow, but can jump, and can use moving/falling platforms)
+const bosses = []; // boss
+const rings = []; // rings that kill you on touch. Expand and delete themselves
+const lava = []; // platform that kills you
+const unstables = []; // platforms that start falling on touch
+const falling = []; // platforms that are falling
+const slowFalling = []; // platforms that are falling slowly (this is used for when the boss sinks into the lava)
+const keys = []; // keys that are collected to complete the level
+const ices = []; // platforms with ice physics
+const lights = []; // lights
+const playerLights = []; // light that follows the player
+const nonSolids = []; // platforms that can be walked through but can be seen
+const invisible = []; // invisible platforms
+const triggers = []; // trigger which initiates the boss
+const teleporters = []; // teleporters
+
+function addPlatform(color, x, y, z, width, height, depth, type, invisible=false, setLighting=null, data={}) {
   let platform;
   setLighting = setLighting === null ? lighting : setLighting;
   if (!setLighting) {
@@ -78,6 +84,7 @@ function addPlatform(color, x, y, z, width, height, depth, type, invisible=false
     );
   }
   platform.position.set(x, y, z);
+  platform.data = data; // Yeah I uh didnt bother with js objects when I wrote this (whatever it works)
   if (!invisible) {
     scene.add(platform);
   }
@@ -148,10 +155,12 @@ function setup(level) {
   for (let slowFall of slowFalling) removeObject(slowFall);
   for (let moveX of movingX) removeObject(moveX);
   for (let moveY of movingY) removeObject(moveY);
-  for (let moveZ of movingZ) removeObject(moveY);
+  for (let moveZ of movingZ) removeObject(moveZ);
   for (let light of lights) removeObject(light);
   for (let light of playerLights) scene.remove(light);
   for (let trigger of triggers) removeObject(trigger);
+  for (let ice of ices) removeObject(ice);
+  for (let teleporter of teleporters) removeObject(teleporter);
   platforms.splice(0, platforms.length);
   trampolines.splice(0, trampolines.length);
   lava.splice(0, lava.length);
@@ -167,6 +176,8 @@ function setup(level) {
   lights.splice(0, lights.length);
   playerLights.splice(0, playerLights.length);
   triggers.splice(0, triggers.length);
+  ices.splice(0, ices.length);
+  teleporters.splice(0, teleporters.length);
 
   setLighting(level);
   
@@ -349,6 +360,41 @@ function setup(level) {
     addPlatform(0x361704, 0, 0, 15, 1.5, 1, 1.5, unstables);
     addPlatform("black", 0, 0, 30, 20, 1, 20, platforms);
     addPlatform("black", 0, 1, 30, 20, 1, 20, triggers, true);
+  } else if (level == 6) {
+    addPlatform(0xc2f1ff, 0, 0, 0, 10, 1, 10, ices);
+    addPlatform(0xc2f1ff, 0, 1, 10, 1.5, 1, 1.5, ices);
+    addPlatform(0xc2f1ff, -4, 1, 18, 1.5, 1, 1.5, ices);
+    addPlatform(0xc2f1ff, -5, 1, 27, 1.5, 1, 1.5, ices);
+    addPlatform(0xc2f1ff, 7, 1, 27, 1.5, 1, 1.5, platforms);
+    addPlatform(0xc2f1ff, -4, 1, 36, 1.5, 1, 1.5, ices);
+    addPlatform(0xdbde33, -11, 1, 0, 1.5, 1, 1.5, trampolines);
+    addPlatform("green", -15, 13, 0, 1.5, 1, 1.5, movingY);
+    addPlatform("green", -8, 19, 0, 1.5, 1, 1.5, platforms);
+    addPlatform("green", 0, 20, 0, 1.5, 1, 1.5, platforms);
+    addPlatform("green", 4, 22, 4, 1.5, 1, 1.5, platforms);
+    addPlatform("green", 8, 24, 0, 1.5, 1, 1.5, platforms);
+    addPlatform("green", 4, 26, -4, 1.5, 1, 1.5, platforms);
+    addPlatform("green", 0, 28, 0, 1.5, 1, 1.5, platforms);
+    addPlatform("green", 4, 30, 4, 1.5, 1, 1.5, platforms);
+    addPlatform("green", 8, 32, 0, 1.5, 1, 1.5, platforms);
+    addPlatform("green", 4, 34, -4, 1.5, 1, 1.5, platforms);
+    addPlatform(0x361704, 9, 36, -4, 1.5, 1, 1.5, unstables);
+    addPlatform(0x361704, 17, 36, -4, 1.5, 1, 1.5, unstables);
+    addPlatform(0x361704, 25, 36, -4, 1.5, 1, 1.5, unstables);
+    addPlatform(0x361704, 33, 36, -4, 1.5, 1, 1.5, unstables);
+    addPlatform("green", 41, 36, -4, 1.5, 1, 1.5, platforms);
+    addPlatform(0xcc55d9, 41, 37, -4, 0.4, 0.4, 0.4, teleporters, false, null, {tpx: 50, tpy: 10, tpz: 50});
+    addPlatform("green", 39, 1.5, 0, 1.5, 1, 1.5, platforms);
+    addPlatform("green", 48.3, 1.5, 0, 1.5, 1, 1.5, platforms);
+    addPlatform("green", 57.6, 1.5, 0, 1.5, 1, 1.5, platforms);
+    addPlatform(0xcc55d9, 57.8, 2.5, 0, 0.4, 0.4, 0.4, teleporters, false, null, {tpx: 0, tpy: 10, tpz: 0});
+    addPlatform("green", 50, 0, 50, 1.5, 1, 1.5, platforms);
+    addPlatform("green", 42, 0, 50, 1.5, 1, 1.5, platforms);
+    addPlatform("green", 34, 0, 50, 1.5, 1, 1.5, platforms);
+    addPlatform("green", 50, 0, 42, 1.5, 1, 1.5, platforms);
+    addPlatform(0xcc55d9, 50, 1, 42, 0.4, 0.4, 0.4, teleporters, false, null, {tpx: 0, tpy: 10, tpz: 0});
+    addPlatform(0xc2f1ff, 0, 0, -12, 1.5, 1, 1.5, ices);
+    addPlatform(0xcc55d9, -3, -47, -17.5, 0.4, 0.4, 0.4, teleporters, false, null, {tpx: 0, tpy: 10, tpz: 0});
   } else {
     addPlatform("green", 0, 0, 0, 1.5, 1, 1.5, platforms);
   }
@@ -366,10 +412,11 @@ function updateCollisions() {
   collisions = collisions.concat(invisible);
   collisions = collisions.concat(unstables);
   collisions = collisions.concat(falling);
-  sightCollisions = collisions.concat(nonSolids).concat(lava);
+  collisions = collisions.concat(ices);
   collisions = collisions.concat(movingX);
   collisions = collisions.concat(movingY);
   collisions = collisions.concat(movingZ);
+  sightCollisions = collisions.concat(nonSolids).concat(lava);
 }
 
 function resetKeys(level) {
@@ -417,6 +464,13 @@ function resetKeys(level) {
     addPlatform("darkorange", 30, 1, 30, 0.4, 0.4, 0.4, keys);
     addPlatform("darkorange", -30, 1, 30, 0.4, 0.4, 0.4, keys);
     addPlatform("darkorange", 0, 1, 60, 0.4, 0.4, 0.4, keys);
+  } else if (level == 6) {
+    addPlatform("darkorange", -4, 2, 36, 0.4, 0.4, 0.4, keys);
+    addPlatform("darkorange", 39, 2.5, 0, 0.4, 0.4, 0.4, keys);
+    addPlatform("darkorange", 34, 1, 50, 0.4, 0.4, 0.4, keys);
+    addPlatform("darkorange", 0, 0, -15, 0.4, 0.4, 0.4, keys);
+    addPlatform("darkorange", -5, -12, -20, 0.4, 0.4, 0.4, keys);
+    addPlatform("darkorange", -3, -40, -17.5, 0.4, 0.4, 0.4, keys);
   }
   keysGoal = keys.length;
 }
@@ -426,8 +480,10 @@ function resetEnemies(level) {
   bossTick = 0;
   bossWave = 0;
   for (let enemy of enemies) removeObject(enemy);
+  for (let enemy of jumpingEnemies) removeObject(enemy);
   for (let boss of bosses) removeObject(boss);
   enemies.splice(0, enemies.length);
+  jumpingEnemies.splice(0, jumpingEnemies.length);
   bosses.splice(0, bosses.length);
   if (level == 2) {
     addPlatform("blue", 0, 1, 17.5, 1, 1, 1, enemies);
@@ -450,8 +506,14 @@ function resetEnemies(level) {
     addPlatform("blue", -15, 1, -2.375, 1, 1, 1, enemies);
   } else if (level == 5) {
     addPlatform("blue", 0, 2, 30, 3, 3, 3, bosses);
+  } else if (level == 6) {
+    addPlatform("blue", 7, 2, 27, 1, 1, 1, jumpingEnemies, false, null, {gravity: 0, stage: 0, timeChasing: 0, tx: 0, ty: 0, tz: 0, seen: false, lsx: 0, lsy: 0, lsz: 0, lsgx: 0, lsgy: 0, lsgz: 0});
+    addPlatform("blue", 42, 1, 50, 1, 1, 1, jumpingEnemies, false, null, {gravity: 0, stage: 0, timeChasing: 0, tx: 0, ty: 0, tz: 0, seen: false, lsx: 0, lsy: 0, lsz: 0, lsgx: 0, lsgy: 0, lsgz: 0});
   }
   for (let enemy of enemies) {
+    enemy.position.y += 0.001;
+  }
+  for (let enemy of jumpingEnemies) {
     enemy.position.y += 0.001;
   }
   for (let boss of bosses) {
@@ -545,7 +607,7 @@ function movePlatform(platform, tx, ty, tz) {
   character.position.set(x, y-0.05, z);
   const touching = collision(character, platform);
   const toMove = [];
-  let otherEnemies = enemies.map(x => x).concat(bosses.map(x => x));
+  let otherEnemies = enemies.map(x => x).concat(bosses.map(x => x)).concat(jumpingEnemies.map(x => x));
   for (let enemy of otherEnemies) {
     enemy.position.y -= 0.05;
     if (collision(enemy, platform)) {
@@ -598,7 +660,7 @@ function enemyLogic(enemy, maxDist=null, speed=null) {
   if (distance < maxDist) {
     const tempx = enemy.position.x;
     const tempy = enemy.position.y;
-    const tempz = enemy.position.z
+    const tempz = enemy.position.z;
     while (!collisionAllPoint(enemy, sightCollisions) && !collision(enemy, character)) {
       enemy.lookAt(character.position);
       enemy.translateZ(0.2);
@@ -645,6 +707,261 @@ function moveEnemy(enemy, tx, tz) {
   enemy.position.set(ex, ey, ez);
 }
 
+function smartEnemyLogic(enemy, maxDist=null, speed=null, setpos=null, jumping=false, ls=null, sensitiveEdge=false, moveAgainstWall=false) {
+  speed = speed || 0.065;
+  const res = canSmartEnemySee(enemy, maxDist);
+  const distance = !setpos ? (!ls || res.cansee ? res.distance : enemy.position.distanceTo(ls)) : enemy.position.distanceTo(setpos);
+  if (!!setpos || !!ls || res.cansee) {
+    const tempx = enemy.position.x;
+    const tempy = enemy.position.y;
+    const tempz = enemy.position.z;
+    enemy.lookAt(
+      !!setpos ? setpos.x : ((!!ls && !res.cansee) ? ls.x : character.position.x),
+      tempy,
+      !!setpos ? setpos.z : ((!!ls && !res.cansee) ? ls.z : character.position.z),
+    );
+    enemy.translateZ(Math.min(speed, distance));
+    const tx = enemy.position.x-tempx;
+    const tz = enemy.position.z-tempz;
+    enemy.position.set(tempx, tempy, tempz);
+    enemy.rotation.set(0, 0, 0);
+    const edgex = moveSmartEnemy(enemy, tx, 0, jumping);
+    const edgez = moveSmartEnemy(enemy, 0, tz, jumping);
+    if (moveAgainstWall && Math.abs(tempx - enemy.position.x) < tx / 2 && tz < speed / 2) {
+      moveSmartEnemy(enemy, 0, tz / Math.abs(tz) * speed / 4 * 3, jumping);
+    } else if (moveAgainstWall && Math.abs(tempz - enemy.position.z) < tz / 2 && tx < speed / 2) {
+      moveSmartEnemy(enemy, tx / Math.abs(tx) * speed /4 * 3, 0, jumping);
+    }
+    return {edge: sensitiveEdge ? edgex || edgez : (edgex || (edgez && tx < speed / 5)) && (edgez || (edgex && tz < speed / 5)), cansee: res.cansee};
+  }
+  return {edge: false, cansee: false};
+}
+
+function smartEnemyLogic2(enemy, maxDist=null, speed=null) {
+  const prevDist = enemy.position.distanceTo(character.position)
+  const tempx = enemy.position.x;
+  const tempy = enemy.position.y;
+  const tempz = enemy.position.z;
+  const cansee = smartEnemyLogic(enemy, maxDist, speed, null, false, !enemy.data.seen ? null : {x: enemy.data.lsx, y: enemy.position.y, z: enemy.data.lsz}, false, true).cansee;
+  if (cansee) {
+    const pchasedistance = enemy.position.distanceTo(character.position) - prevDist;
+    const pchasex = enemy.position.x;
+    const pchasey = enemy.position.y;
+    const pchasez = enemy.position.z;
+    
+    enemy.position.x = tempx;
+    enemy.position.y = tempy;
+    enemy.position.z = tempz;
+
+    smartEnemyLogic(enemy, maxDist, speed, {x: enemy.data.lsx, y: enemy.position.y, z: enemy.data.lsz}, false, null, false, true).cansee;
+    const lschasedistance = enemy.position.distanceTo(character.position) - prevDist;
+
+    if (/*!enemy.data.seen || pchasedistance < lschasedistance*/true) {
+      enemy.position.x = pchasex;
+      enemy.position.y = pchasey;
+      enemy.position.z = pchasez;
+      enemy.data.seen = true;
+      enemy.data.lsx = x;
+      enemy.data.lsz = z;
+    }
+  }
+}
+
+function jumpingEnemyLogic(enemy) {
+  let res;
+  let characterTouchingGround;
+  if (enemy.data.stage == 0) {
+    res = smartEnemyLogic(enemy, null, 0.04, null, false, !enemy.data.seen ? null : {x: enemy.data.lsx, y: enemy.position.y, z: enemy.data.lsz});
+    if (res.cansee) {
+      enemy.data.timeChasing += 1;
+    } else {
+      enemy.data.timeChasing = 0;
+    }
+    checkJump(enemy, res);
+  } else if (enemy.data.stage == 1) {
+    updateGravity(enemy);
+
+    let characterTouchingGround = false;
+    if (character.position.distanceTo({x: enemy.data.tx, y: character.position.y, z: enemy.data.tz}) < 2 &&  enemy.position.y > y) {
+      character.position.y -= 0.05;
+      characterTouchingGround = collisionAll(character, collisions);
+      character.position.y += 0.05;
+
+      if (characterTouchingGround) {
+        smartEnemyLogic(enemy, null, 0.085, {x: x, y: enemy.position.y, z: z}, true);
+      }
+    } 
+    
+    if (!characterTouchingGround) {
+      smartEnemyLogic(enemy, null, 0.085, {x: enemy.data.tx, y: enemy.position.y, z: enemy.data.tz}, true);
+    }
+    
+    enemy.position.y -= 0.05;
+    const touchingGround = collisionAll(enemy, collisions);
+    const bounce = collisionAll(enemy, trampolines);
+    enemy.position.y += 0.05;
+    if (touchingGround && !bounce) {
+      enemy.data.stage = 2;
+      addRing("darkblue", enemy.position.x, enemy.position.y - 0.3, enemy.position.z, 0.05, 0.1, rings);
+    } else if (bounce) {
+      enemy.data.stage = 3;
+      enemy.data.gravity = -4;
+    }
+  } else if (enemy.data.stage == 2) {
+    enemy.data.timeChasing += 1;
+    if (enemy.data.timeChasing == 60) {
+      addRing("darkblue", enemy.position.x, enemy.position.y - 0.3, enemy.position.z, 0.05, 0.1, rings);
+    } else if (enemy.data.timeChasing > 90) {
+      enemy.data.timeChasing = 0;
+      enemy.data.stage = 0;
+    }
+  } else if (enemy.data.stage == 3) {
+    updateGravity(enemy);
+    enemy.position.y -= 0.05;
+    const touchingGround = collisionAll(enemy, collisions);
+    const bounce = collisionAll(enemy, trampolines);
+    enemy.position.y += 0.05;
+    if (touchingGround && !bounce) {
+      enemy.data.stage = 2;
+      addRing("darkblue", enemy.position.x, enemy.position.y - 0.3, enemy.position.z, 0.05, 0.1, rings);
+    } else if (bounce) {
+      checkJump(enemy, {cansee: canSmartEnemySee(enemy, null).cansee, edge: false}, true);
+      if (enemy.data.stage == 3) {
+        enemy.data.gravity = -4;
+      }
+    }
+  }
+  
+  if (enemy.data.stage == 0 && res ? res.cansee : canSmartEnemySee(enemy, enemy.data.stage == 1 ? 20 : 15).cansee) {
+    enemy.data.seen = true;
+    enemy.data.lsx = x;
+    enemy.data.lsy = y;
+    enemy.data.lsz = z;
+    
+    character.position.set(x, y-0.2, z);
+    characterTouchingGround = collisionAll(character, collisions);
+    character.position.set(x, y, z);
+    if (characterTouchingGround && ((enemy.data.stage == 1 ? new THREE.Vector3(enemy.data.tx, enemy.data.ty, enemy.data.tz) : enemy.position)).distanceTo(character.position) < 20) {
+      enemy.data.lsgx = x;
+      enemy.data.lsgy = y;
+      enemy.data.lsgz = z;
+    }
+  }
+
+  for (let teleporter of teleporters) {
+    if (collision(teleporter, enemy)) {
+      enemy.position.x = teleporter.data.tpx;
+      enemy.position.y = teleporter.data.tpy;
+      enemy.position.z = teleporter.data.tpz;
+      enemy.data.stage = 3;
+      enemy.data.gravity = 0;
+      enemy.data.timeChasing = 0;
+    }
+  }
+}
+
+function checkJump(enemy, res, always=false) {
+  if (res.edge || enemy.data.timeChasing > 120 || Math.abs(res.cansee ? y : enemy.data.lsgy) - enemy.position.y > 0.25 || always) {
+    if (res.cansee) {
+      character.position.set(x, y-0.05, z);
+      const characterTouchingGround = collisionAll(character, collisions);
+      character.position.set(x, y, z);
+      if (characterTouchingGround) {
+        setJumpingEnemyTarget(enemy, x, y, z)
+      }
+    } else if (enemy.data.seen) {
+      let jump = true;
+      if (!(enemy.data.timeChasing > 120 || Math.abs(res.cansee ? y : enemy.data.lsgy) - enemy.position.y > 0.25 || always)) {
+        const tempx = enemy.position.x;
+        const tempy = enemy.position.y;
+        const tempz = enemy.position.z;
+        jump = smartEnemyLogic(enemy, null, null, {x: enemy.data.lsgx, y: enemy.data.lsgy, z: enemy.data.lsgz}, false, null, true).edge;
+        enemy.position.x = tempx;
+        enemy.position.y = tempy;
+        enemy.position.z = tempz;
+      }
+      
+      if (jump) {
+        const distEnemyLsg = enemy.position.distanceTo(new THREE.Vector3(enemy.data.lsgx, enemy.position.y, enemy.data.lsgz));
+        if (distEnemyLsg > 2 && distEnemyLsg < 21) {
+          setJumpingEnemyTarget(enemy, enemy.data.lsgx, enemy.data.lsgy, enemy.data.lsgz)
+        }
+      }
+    }
+  }
+}
+
+function updateGravity(enemy) {
+  const tempy = enemy.position.y;
+  enemy.position.y -= enemy.data.gravity * 0.1;
+  enemy.data.gravity += 0.05;
+  if (collisionAll(enemy, collisions)) {
+    let count = 0;
+    while (collisionAll(enemy, collisions) && count < 10) {
+      if (enemy.data.gravity > 0) {
+        enemy.position.y += 0.0025;
+      } else {
+        enemy.position.y -= 0.0025;
+      }
+      count += 1;
+    }
+    if (count == 10) enemy.position.y = tempy;
+    enemy.data.gravity = 0;
+  }
+}
+
+function setJumpingEnemyTarget(enemy, x, y, z) {
+  enemy.data.stage = 1;
+  enemy.data.timeChasing = 0;
+  enemy.data.gravity = -4;
+  enemy.data.tx = x;
+  enemy.data.ty = y;
+  enemy.data.tz = z;
+}
+
+function canSmartEnemySee(enemy, maxDist=null) {
+  maxDist = maxDist || (!lighting ? 15 : 3);
+  const distance = enemy.position.distanceTo(character.position);
+  if (distance < maxDist) {
+    const tempx = enemy.position.x;
+    const tempy = enemy.position.y;
+    const tempz = enemy.position.z;
+    while (!collisionAllPoint(enemy, sightCollisions) && !collision(enemy, character)) {
+      enemy.lookAt(character.position);
+      enemy.translateZ(0.2);
+      enemy.rotation.set(0, 0, 0);
+    }
+    const res = {cansee: collision(enemy, character), distance: distance};
+    enemy.position.set(tempx, tempy, tempz);
+    enemy.rotation.set(0, 0, 0);
+    return res;
+  }
+  return {cansee: false, distance: distance};
+}
+
+function moveSmartEnemy(enemy, tx, tz, jumping=false) {
+  let otherEnemies = enemies.map(x => x).concat(bosses.map(x => x)).concat(jumpingEnemies.map(x => x));
+  otherEnemies.splice(otherEnemies.indexOf(enemy), 1);
+  let ex = enemy.position.x;
+  let ey = enemy.position.y;
+  let ez = enemy.position.z;
+  for (let i = 0; i < 6; i++) {
+    enemy.position.set(ex+(tx/5), ey, ez+(tz/5));
+    if (!(collisionAll(enemy, collisions) || collisionAll(enemy, otherEnemies))) {
+      enemy.position.y -= 0.05
+      if (jumping || collisionAll(enemy, collisions)) {
+        ex += tx / 5;
+        ez += tz / 5;
+      } else {
+        enemy.position.set(ex, ey, ez);
+        return true;
+      }
+    }
+  }
+  enemy.position.set(ex, ey, ez);
+  return false;
+}
+
 function moveOnAxis(tx, tz) {
   character.lookAt(
     controls.object.position.x,
@@ -663,6 +980,8 @@ function moveOnAxis(tx, tz) {
   move(0, 0, tz);
   xVel += tx / 6;
   zVel += tz / 6;
+  xVel = Math.min(xVel, 0.15*(1/Math.sqrt(2)));
+  zVel = Math.min(zVel, 0.15*(1/Math.sqrt(2)));
 }
 
 function respawn() {
@@ -686,15 +1005,16 @@ function nextLevel() {
   start = (Date.now() - start) / 1000;
   startOfAttempt = (Date.now() - startOfAttempt) / 1000;
   document.getElementById("leaderboard").className = "post";
-  localStorage.setItem("level", level + 1 === 6 ? 1 : level + 1);
-  localStorage.setItem("levelUnlocked", Math.min(Math.max(level + 1, localStorage.getItem("levelUnlocked")), 5));
+  localStorage.setItem("level", level === MAX_LEVEL ? 1 : level + 1);
+  localStorage.setItem("levelUnlocked", Math.min(Math.max(level + 1, localStorage.getItem("levelUnlocked")), MAX_LEVEL));
   controls.unlock();
 }
 
-function skipLevel() {
-  localStorage.setItem("level", level + 1 === 6 ? 1 : level + 1);
-  localStorage.setItem("levelUnlocked", Math.min(Math.max(level+1, localStorage.getItem("levelUnlocked")), 5));
-  level = level + 1 === 6 ? 1 : level + 1;
+function skipLevel(inSelection) {
+  const currentLvl = inSelection ? levelSelected : level;
+  level = currentLvl === MAX_LEVEL ? 1 : currentLvl + 1;
+  localStorage.setItem("level", level);
+  localStorage.setItem("levelUnlocked", Math.min(Math.max(currentLvl + 1, localStorage.getItem("levelUnlocked")), MAX_LEVEL));
   setup(level);
   if (locked) {
     controls.unlock();
@@ -713,6 +1033,7 @@ function frame() {
           || collisionAll(character, movingZ)
           || collisionAll(character, unstables)
           || collisionAll(character, falling)
+          || collisionAll(character, ices)
          ) {
         gravity = -1.5;
       }
@@ -755,6 +1076,16 @@ function frame() {
     for (let moveZ of movingZ) {
       movePlatform(moveZ, 0, 0, (tick % 500) < 250 ? 0.05 : -0.05);
     }
+
+    for (let teleporter of teleporters) {
+      if (collision(character, teleporter)) {
+        x = teleporter.data.tpx;
+        y = teleporter.data.tpy;
+        z = teleporter.data.tpz;
+        character.position.set(x, y, z);
+        gravity = 0;
+      }
+    }
     
     const toConvert = [];
     for (let unstable of unstables) {
@@ -795,13 +1126,26 @@ function frame() {
       xMov *= 1/Math.sqrt(2);
       zMov *= 1/Math.sqrt(2);
     }
+
+    xVel *= 0.96;
+    zVel *= 0.96;
+    character.position.set(x, y-0.05, z);
+    if (collisionAll(character, ices)) {
+      move(xVel/1.5, 0, zVel/1.5);
+      xMov *= 0.3;
+      zMov *= 0.3;
+    } else {
+      xVel *= 0.953;
+      zVel *= 0.953;
+    }
+    character.position.set(x, y, z);
+
     moveOnAxis(xMov, zMov);
     if (!(xMov == 0 && zMov == 0)) {
       if (tutorial == "Press the Arrow Keys/WASD to move") tutorial = "Press Space to jump";
     }
-    xVel *= 0.875;
-    zVel *= 0.875;
-    //moveOnAxis(xVel/4, zVel/4);
+    //xVel *= 0.875;
+    //zVel *= 0.875;
   
     for (let key of keys) {
       if (collision(character, key)) {
@@ -832,10 +1176,14 @@ function frame() {
       }
     }
     
-    if (keysPressed.has("AltLeft") && keysPressed.has("KeyF") && keysPressed.has("Digit4")) skipLevel();
+    if (keysPressed.has("AltLeft") && keysPressed.has("KeyF") && keysPressed.has("Digit4")) skipLevel(false);
 
     for (let enemy of enemies) {
-      enemyLogic(enemy)
+      enemyLogic(enemy); // Cube parkour 2 uses smartEnemyLogic2
+    }
+
+    for (let enemy of jumpingEnemies) {
+      jumpingEnemyLogic(enemy)
     }
     
     if (collisionAll(character, triggers) && !bossFightStarted) {
@@ -919,14 +1267,15 @@ function frame() {
       const radius = ring.geometry.parameters.radius;
       const tube = ring.geometry.parameters.tube;
       ring.geometry.dispose();
-      ring.geometry = new THREE.TorusGeometry(radius + 0.1, tube, 16, 50);
+      ring.geometry = new THREE.TorusGeometry(radius + 0.1, radius < 18.5 ? tube : tube - 0.005, 16, 100);
+      //ring.geometry = new THREE.TorusGeometry(radius + 0.1, tube, 16, 50);
       if (radius > 20) {
         removeObject(ring);
         rings.splice(rings.indexOf(ring), 1);
       }
     }
   
-    if (y < -50 || collisionAll(character, enemies.concat(bosses)) || collisionAll(character, lava) || collisionAllRing(character, rings)) respawn();
+    if (y < -50 || collisionAll(character, enemies.concat(bosses.concat(jumpingEnemies))) || collisionAll(character, lava) || collisionAllRing(character, rings)) respawn();
   
     ctx.clearRect(0, 0, width, height);
     ctx.fillStyle = "#ffffff";
@@ -1017,7 +1366,7 @@ function frame() {
     ctx.textAlign = "center";
     ctx.font = `70px "${FONT_NAME}"`;
     ctx.fillText("Level "+levelSelected, width/2, height/2);
-    ctx.fillStyle = levelSelected + 1 > Math.min(localStorage.getItem("levelUnlocked") || 1, 5) ? "gray" : "white";
+    ctx.fillStyle = levelSelected + 1 > Math.min(localStorage.getItem("levelUnlocked") || 1, MAX_LEVEL) ? "gray" : "white";
     ctx.fillText("+", (width/2)+150, height/2);
     ctx.fillStyle = levelSelected - 1 < 1 ? "gray" : "white";
     ctx.fillText("-", (width/2)-150, height/2);
@@ -1025,7 +1374,7 @@ function frame() {
 
     ctx.font = `35px "${FONT_NAME}"`;
     ctx.fillText("Leaderboard", width/2, height/2 + 50);
-    if (levelSelected == (localStorage.getItem("levelUnlocked") || 1) && levelSelected !== 5) {
+    if (levelSelected == (localStorage.getItem("levelUnlocked") || 1) && levelSelected < MAX_LEVEL) {
       ctx.font = `33px "${FONT_NAME}"`;
       ctx.fillText("Skip this level", width/2, height/2 + 85);
     }
@@ -1155,7 +1504,7 @@ canvas.onclick = canvasText.onclick = async event => {
         }
       }
     } else if (win && !posting) {
-      level = level + 1 === 6 ? 1 : level + 1;
+      level = level === MAX_LEVEL ? 1 : level + 1;
       setup(level);
       win = false;
       location = "locked";
@@ -1164,7 +1513,7 @@ canvas.onclick = canvasText.onclick = async event => {
       if (Math.abs(event.clientY - ((height/2)-25)) < 30 && Math.abs(event.clientX - (width/2)) < 250) {
         if (event.clientX - (width/2) > 0) {
           levelSelected += 1;
-          if (levelSelected > Math.min(localStorage.getItem("levelUnlocked") || 1, 5)) {
+          if (levelSelected > Math.min(localStorage.getItem("levelUnlocked") || 1, MAX_LEVEL)) {
             levelSelected -= 1;
           }
         } else {
@@ -1179,8 +1528,8 @@ canvas.onclick = canvasText.onclick = async event => {
         location = "leaderboard";
         getLeaderboard(levelSelected);
         scrollPos = 0;
-      } else if (Math.abs(event.clientY - ((height/2)+65)) < 20 && Math.abs(event.clientX - (width/2)) < 100 && levelSelected == (localStorage.getItem("levelUnlocked") || 1) && levelSelected !== 5) {
-        skipLevel();
+      } else if (Math.abs(event.clientY - ((height/2)+65)) < 20 && Math.abs(event.clientX - (width/2)) < 100 && levelSelected == (localStorage.getItem("levelUnlocked") || 1) && levelSelected < MAX_LEVEL) {
+        skipLevel(true);
       } else {
         levelSelect = false;
         location = "locked";
@@ -1195,7 +1544,7 @@ canvas.onclick = canvasText.onclick = async event => {
       if (event.clientY < 100 && Math.abs(event.clientX - (width/2)) < 300) {
         if (event.clientX - (width/2) > 0) {
           levelSelected += 1;
-          if (levelSelected > 5) {
+          if (levelSelected > MAX_LEVEL) {
             levelSelected -= 1;
           } else {
             getLeaderboard(levelSelected);
@@ -1301,8 +1650,8 @@ let startOfAttempt = 0;
 let attempts = 1;
 let levelStarted = false;
 let lighting = false;
-let iframe = window.self !== window.top;
-let level = Math.min(localStorage.getItem("level") || 1, 6);
+let iframe = window.self !== window.top && IFRAME_REDIRECT !== null;
+let level = Math.min(localStorage.getItem("level") || 1, MAX_LEVEL);
 const enableEnemies = true;
 
 const command = window.location.hash ? window.location.hash.substring(1) : "";
