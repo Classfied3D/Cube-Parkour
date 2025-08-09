@@ -13,7 +13,7 @@ const SERVER_URL = "https://cube-parkour-leaderboard.classfied3d.repl.co";
 const FONT_FILE = "https://fonts.gstatic.com/s/sofiasans/v10/Yq6E-LCVXSLy9uPBwlAThu1SY8Cx8rlT69B6sJ3qpPOgW08lfLY.woff2";
 const FONT_NAME = "Sofia Sans";
 
-const AUDIO_URL = "https://cdn.jsdelivr.net/gh/Classfied3D/Cube-Parkour@3ac68d0/audio/theme1.mp3";
+const AUDIO_URL = "https://cdn.jsdelivr.net/gh/Classfied3D/Cube-Parkour@f353609/public/audio/theme1.mp3";
 const END_POS = 66.2;
 const REPEAT_POS = 34.3;
 
