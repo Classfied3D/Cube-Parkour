@@ -1492,6 +1492,16 @@ async function getLeaderboard(level, username=null) {
 async function startAudio() {
   theme.play().then(_ => {
     playing = true;
+
+    setInterval(() => {
+      if (theme.currentTime > END_POS) {
+        theme.pause();
+        theme.currentTime = REPEAT_POS;
+        setTimeout(() => {
+          theme.play();
+        }, 15);
+      }
+    }, 2);
   }).catch(_ => {})
 }
 
@@ -1499,16 +1509,6 @@ async function audioLoad() {
   theme = new Audio(AUDIO_URL);
   document.onclick = startAudio;
   startAudio();
-
-  setInterval(() => {
-    if (theme.currentTime > END_POS) {
-      theme.pause();
-      theme.currentTime = REPEAT_POS;
-      setTimeout(() => {
-        theme.play();
-      }, 15);
-    }
-  }, 2);
 }
 
 document.getElementById("leaderboard").onclick = postScore;
