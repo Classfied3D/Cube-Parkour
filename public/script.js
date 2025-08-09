@@ -1490,19 +1490,21 @@ async function getLeaderboard(level, username=null) {
 }
 
 async function startAudio() {
-  theme.play().then(_ => {
-    playing = true;
+  if (theme.canplay) {
+    theme.play().then(_ => {
+      playing = true;
 
-    setInterval(() => {
-      if (theme.currentTime > END_POS) {
-        theme.pause();
-        setTimeout(() => {
-          theme.currentTime = REPEAT_POS;
-          theme.play();
-        }, 15);
-      }
-    }, 2);
-  }).catch(_ => {})
+      setInterval(() => {
+        if (theme.currentTime > END_POS) {
+          theme.pause();
+          setTimeout(() => {
+            theme.currentTime = REPEAT_POS;
+            theme.play();
+          }, 15);
+        }
+      }, 2);
+    }).catch(_ => {})
+  }
 }
 
 async function audioLoad() {
