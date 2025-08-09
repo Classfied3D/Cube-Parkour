@@ -673,14 +673,14 @@ the library.  If this is what you want to do, use the GNU Lesser General
 Public License instead of this License.  But first, please read
 <https://www.gnu.org/licenses/why-not-lgpl.html>.
 
-====================================================================
+=====================================================================
 ADDITIONAL LICENSE NOTICE FOR AUDIO FILES
 
-All files located in the `/audio/` directory of this repository are
-**not** licensed under the GNU General Public License. They are
-instead licensed under the Creative Commons Attribution-NonCommercial-
-ShareAlike 4.0 International License (CC BY-NC-SA 4.0).
+All files located in the `/public/audio/` directory of this
+repository are **not** licensed under the GNU General Public License.
+They are instead licensed under the Creative Commons Attribution-
+NonCommercial-ShareAlike 4.0 International License (CC BY-NC-SA 4.0).
 
 See `LICENSE-MUSIC` in the repository root for the full text of the
 Creative Commons license and attribution details.
-====================================================================
+=====================================================================

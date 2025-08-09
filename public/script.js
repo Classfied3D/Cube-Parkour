@@ -9,8 +9,14 @@ import {PointerLockControls} from "three/pointerlock";
 
 const IFRAME_REDIRECT = "https://cube-parkour.classfied3d.repl.co/";
 const SERVER_URL = "https://cube-parkour-leaderboard.classfied3d.repl.co";
+
 const FONT_FILE = "https://fonts.gstatic.com/s/sofiasans/v10/Yq6E-LCVXSLy9uPBwlAThu1SY8Cx8rlT69B6sJ3qpPOgW08lfLY.woff2";
 const FONT_NAME = "Sofia Sans";
+
+const AUDIO_URL = "https://cdn.jsdelivr.net/gh/Classfied3D/Cube-Parkour@3ac68d0/audio/theme1.mp3";
+const END_POS = 66.2;
+const REPEAT_POS = 34.3;
+
 const DEBUG = false;
 
 const FPS_INTERVAL = 1000 / 60;
@@ -1483,6 +1489,28 @@ async function getLeaderboard(level, username=null) {
   }
 }
 
+async function startAudio() {
+  theme.play().then(_ => {
+    playing = true;
+  }).catch(_ => {})
+}
+
+async function audioLoad() {
+  theme = new Audio(AUDIO_URL);
+  document.onclick = startAudio;
+  startAudio();
+
+  setInterval(() => {
+    if (theme.currentTime > END_POS) {
+      theme.pause();
+      theme.currentTime = REPEAT_POS;
+      setTimeout(() => {
+        theme.play();
+      }, 15);
+    }
+  }, 2);
+}
+
 document.getElementById("leaderboard").onclick = postScore;
 
 canvas.onclick = canvasText.onclick = async event => {
@@ -1660,6 +1688,9 @@ let iframe = window.self !== window.top && IFRAME_REDIRECT !== null;
 let level = Math.min(localStorage.getItem("level") || 1, MAX_LEVEL);
 const enableEnemies = true;
 
+let playing = false;
+let theme;
+
 const command = window.location.hash ? window.location.hash.substring(1) : "";
 try {
   const commands = command.split(",");
@@ -1696,13 +1727,17 @@ function frameLoop() {
   }
 }
 
-setup(level);
-var font = new FontFace(
+let font = new FontFace(
   FONT_NAME,
   `url(${FONT_FILE})`
 );
 document.fonts.add(font);
 font.load();
+
+audioLoad();
+
+setup(level);
+
 document.fonts.load(`35px ${FONT_NAME}`).then((fonts) => {
   document.getElementById("loading").className = "hidden";
   //frame();

@@ -1,0 +1,5 @@
+**/*.md
+**/*.mp3
+LICENSE
+LICENSE-MUSIC
+.gitignore
