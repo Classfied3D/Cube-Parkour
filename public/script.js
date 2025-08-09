@@ -14,7 +14,7 @@ const FONT_FILE = "https://fonts.gstatic.com/s/sofiasans/v10/Yq6E-LCVXSLy9uPBwlA
 const FONT_NAME = "Sofia Sans";
 
 const AUDIO_URL = "https://cdn.jsdelivr.net/gh/Classfied3D/Cube-Parkour@f353609/public/audio/theme1.mp3";
-const END_POS = 66.1;
+const END_POS = 66.17;
 const REPEAT_POS = 34.3;
 
 const DEBUG = false;
@@ -1496,8 +1496,8 @@ async function startAudio() {
     setInterval(() => {
       if (theme.currentTime > END_POS) {
         theme.pause();
-        theme.currentTime = REPEAT_POS;
         setTimeout(() => {
+          theme.currentTime = REPEAT_POS;
           theme.play();
         }, 15);
       }
