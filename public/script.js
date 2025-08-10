@@ -14,7 +14,7 @@ const FONT_FILE = "https://fonts.gstatic.com/s/sofiasans/v10/Yq6E-LCVXSLy9uPBwlA
 const FONT_NAME = "Sofia Sans";
 
 const AUDIO_URL = "https://cdn.jsdelivr.net/gh/Classfied3D/Cube-Parkour@7e37e2d/public/audio/theme1.mp3";
-const END_POS = 66.17;
+const END_POS = 66.2;
 const REPEAT_POS = 34.3;
 
 const DEBUG = false;
@@ -29,9 +29,9 @@ let height = window.innerHeight;
 
 const canvas = document.getElementById("c");
 const renderer = new THREE.WebGLRenderer({canvas, antialias: true});
-renderer.physicallyCorrectLights = true;
+//renderer.physicallyCorrectLights = true;
 renderer.setSize(width, height);
-renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setClearColor("lightblue");
 
 const canvasText = document.getElementById("ctext");
@@ -54,6 +54,16 @@ scene.background = skybox;*/
 
 const camera = new THREE.PerspectiveCamera(65, width / height, 1, 1000);
 const controls = new PointerLockControls(camera, document.body);
+
+const character = new THREE.Mesh(
+  new THREE.BoxGeometry(1, 1, 1),
+  new THREE.MeshBasicMaterial({color: "red"}),
+);
+character.userData.isStill = false;
+character.castShadow = false;
+scene.add(character);
+
+let aPoint = new THREE.Vector3();
 
 let collisions = [];
 let sightCollisions = [];
@@ -96,10 +106,28 @@ function addPlatform(color, x, y, z, width, height, depth, type, invisible=false
     );
   }
   platform.position.set(x, y, z);
-  platform.data = data; // Yeah I uh didnt bother with js objects when I wrote this (whatever it works)
-  if (!invisible) {
-    scene.add(platform);
+  platform.userData = data;
+  platform.geometry.computeBoundingBox();
+  
+  platform.userData.isStill = !(
+    type === enemies
+    || type === jumpingEnemies
+    || type === bosses
+    || type === falling
+    || type === slowFalling
+    || type === rings
+    || type === playerLights
+    || type === movingX
+    || type === movingY
+    || type === movingZ);
+
+  if (platform.userData.isStill) {
+    platform.userData.staticBox = platform.geometry.boundingBox.clone();
+    platform.userData.staticBox.min.add(platform.position);
+    platform.userData.staticBox.max.add(platform.position);
   }
+
+  if (!invisible) scene.add(platform);
   type.push(platform);
 }
 
@@ -548,47 +576,67 @@ function setLighting(level) {
   }
 }
 
-const character = new THREE.Mesh(
-  new THREE.BoxGeometry(1, 1, 1),
-  new THREE.MeshBasicMaterial({color: "red"}),
-);
-character.castShadow = false;
-scene.add(character);
+function collision(a, b/*, updateMatrix=true*/) {
+  // Usually updating the matrix would be required but it is expensive and we don't need it in this case
+  //if (updateMatrix) scene.updateMatrixWorld(true);
 
-function collision(a, b) {
-  let aBox = new THREE.Box3(
-    new THREE.Vector3(),
-    new THREE.Vector3(),
-  );
-  aBox.setFromObject(a);
+  let aBox;
+  let bBox;
+  if (a.userData.isStill) {
+    aBox = a.userData.staticBox;
+  } else {
+    if (!a.geometry.boundingBox) a.geometry.computeBoundingBox();
+    aBox = a.geometry.boundingBox.clone();
+    aBox.min.add(a.position);
+    aBox.max.add(a.position);
+  }
   
-  let bBox = new THREE.Box3(
-    new THREE.Vector3(),
-    new THREE.Vector3(),
-  );
-  bBox.setFromObject(b);
-  
+  if (b.userData.isStill) {
+    bBox = b.userData.staticBox;
+  } else {
+    if (!b.geometry.boundingBox) b.geometry.computeBoundingBox();
+    bBox = b.geometry.boundingBox.clone();
+    bBox.min.add(b.position);
+    bBox.max.add(b.position);
+  }
+
   return aBox.intersectsBox(bBox);
 }
 
 function collisionAll(a, collisions) {
-  return collisions.some(b => collision(a, b));
+  //scene.updateMatrixWorld(true);
+  const moving = !a.userData.isStill;
+  if (moving) {
+    if (!a.geometry.boundingBox) a.geometry.computeBoundingBox();
+    a.userData.staticBox = a.geometry.boundingBox.clone();
+    a.userData.staticBox.min.add(a.position);
+    a.userData.staticBox.max.add(a.position);
+    a.userData.isStill = true;
+  }
+
+  const res = collisions.some(b => collision(a, b/*, false*/));
+  
+  if (moving) a.userData.isStill = false;
+  return res
 }
 
-function collisionPoint(a, b) {
+function collisionPoint(a, b/*, updateMatrix=true*/) {
+  //if (updateMatrix) scene.updateMatrixWorld(true);
+
   let aPoint = a.position.clone();
+
+  if (!b.geometry.boundingBox) b.geometry.computeBoundingBox();
   
-  let bBox = new THREE.Box3(
-    new THREE.Vector3(),
-    new THREE.Vector3(),
-  );
-  bBox.setFromObject(b);
-  
+  let bBox = b.geometry.boundingBox.clone();
+  bBox.min.add(b.position);
+  bBox.max.add(b.position);
+
   return bBox.containsPoint(aPoint);
 }
 
 function collisionAllPoint(a, collisions) {
-  return collisions.some(b => collisionPoint(a, b));
+  //scene.updateMatrixWorld(true);
+  return collisions.some(b => collisionPoint(a, b/*, false*/));
 }
 
 function collisionRing(a, b) {
@@ -597,10 +645,7 @@ function collisionRing(a, b) {
   const tube = b.geometry.parameters.tube;
   const height = a.geometry.parameters.height;
   const depth = a.geometry.parameters.depth;
-  if (Math.abs(distance - radius) < depth && Math.abs(a.position.y - b.position.y) < tube/2 + height/2) {
-    return true;
-  }
-  return false;
+  return Math.abs(distance - radius) < depth && Math.abs(a.position.y - b.position.y) < tube/2 + height/2;
 }
 
 function collisionAllRing(a, collisions) {
@@ -754,7 +799,7 @@ function smartEnemyLogic2(enemy, maxDist=null, speed=null) {
   const tempx = enemy.position.x;
   const tempy = enemy.position.y;
   const tempz = enemy.position.z;
-  const cansee = smartEnemyLogic(enemy, maxDist, speed, null, false, !enemy.data.seen ? null : {x: enemy.data.lsx, y: enemy.position.y, z: enemy.data.lsz}, false, true).cansee;
+  const cansee = smartEnemyLogic(enemy, maxDist, speed, null, false, !enemy.userData.seen ? null : {x: enemy.userData.lsx, y: enemy.position.y, z: enemy.userData.lsz}, false, true).cansee;
   if (cansee) {
     const pchasedistance = enemy.position.distanceTo(character.position) - prevDist;
     const pchasex = enemy.position.x;
@@ -765,16 +810,16 @@ function smartEnemyLogic2(enemy, maxDist=null, speed=null) {
     enemy.position.y = tempy;
     enemy.position.z = tempz;
 
-    smartEnemyLogic(enemy, maxDist, speed, {x: enemy.data.lsx, y: enemy.position.y, z: enemy.data.lsz}, false, null, false, true).cansee;
+    smartEnemyLogic(enemy, maxDist, speed, {x: enemy.userData.lsx, y: enemy.position.y, z: enemy.userData.lsz}, false, null, false, true).cansee;
     const lschasedistance = enemy.position.distanceTo(character.position) - prevDist;
 
-    if (/*!enemy.data.seen || pchasedistance < lschasedistance*/true) {
+    if (/*!enemy.userData.seen || pchasedistance < lschasedistance*/true) {
       enemy.position.x = pchasex;
       enemy.position.y = pchasey;
       enemy.position.z = pchasez;
-      enemy.data.seen = true;
-      enemy.data.lsx = x;
-      enemy.data.lsz = z;
+      enemy.userData.seen = true;
+      enemy.userData.lsx = x;
+      enemy.userData.lsz = z;
     }
   }
 }
@@ -782,19 +827,19 @@ function smartEnemyLogic2(enemy, maxDist=null, speed=null) {
 function jumpingEnemyLogic(enemy) {
   let res;
   let characterTouchingGround;
-  if (enemy.data.stage == 0) {
-    res = smartEnemyLogic(enemy, null, 0.04, null, false, !enemy.data.seen ? null : {x: enemy.data.lsx, y: enemy.position.y, z: enemy.data.lsz});
+  if (enemy.userData.stage == 0) {
+    res = smartEnemyLogic(enemy, null, 0.04, null, false, !enemy.userData.seen ? null : {x: enemy.userData.lsx, y: enemy.position.y, z: enemy.userData.lsz});
     if (res.cansee) {
-      enemy.data.timeChasing += 1;
+      enemy.userData.timeChasing += 1;
     } else {
-      enemy.data.timeChasing = 0;
+      enemy.userData.timeChasing = 0;
     }
     checkJump(enemy, res);
-  } else if (enemy.data.stage == 1) {
+  } else if (enemy.userData.stage == 1) {
     updateGravity(enemy);
 
     let characterTouchingGround = false;
-    if (character.position.distanceTo({x: enemy.data.tx, y: character.position.y, z: enemy.data.tz}) < 2 &&  enemy.position.y > y) {
+    if (character.position.distanceTo({x: enemy.userData.tx, y: character.position.y, z: enemy.userData.tz}) < 2 &&  enemy.position.y > y) {
       character.position.y -= 0.05;
       characterTouchingGround = collisionAll(character, collisions);
       character.position.y += 0.05;
@@ -805,7 +850,7 @@ function jumpingEnemyLogic(enemy) {
     } 
     
     if (!characterTouchingGround) {
-      smartEnemyLogic(enemy, null, 0.085, {x: enemy.data.tx, y: enemy.position.y, z: enemy.data.tz}, true);
+      smartEnemyLogic(enemy, null, 0.085, {x: enemy.userData.tx, y: enemy.position.y, z: enemy.userData.tz}, true);
     }
     
     enemy.position.y -= 0.05;
@@ -813,67 +858,67 @@ function jumpingEnemyLogic(enemy) {
     const bounce = collisionAll(enemy, trampolines);
     enemy.position.y += 0.05;
     if (touchingGround && !bounce) {
-      enemy.data.stage = 2;
+      enemy.userData.stage = 2;
       addRing("darkblue", enemy.position.x, enemy.position.y - 0.3, enemy.position.z, 0.05, 0.1, rings);
     } else if (bounce) {
-      enemy.data.stage = 3;
-      enemy.data.gravity = -4;
+      enemy.userData.stage = 3;
+      enemy.userData.gravity = -4;
     }
-  } else if (enemy.data.stage == 2) {
-    enemy.data.timeChasing += 1;
-    if (enemy.data.timeChasing == 60) {
+  } else if (enemy.userData.stage == 2) {
+    enemy.userData.timeChasing += 1;
+    if (enemy.userData.timeChasing == 60) {
       addRing("darkblue", enemy.position.x, enemy.position.y - 0.3, enemy.position.z, 0.05, 0.1, rings);
-    } else if (enemy.data.timeChasing > 90) {
-      enemy.data.timeChasing = 0;
-      enemy.data.stage = 0;
+    } else if (enemy.userData.timeChasing > 90) {
+      enemy.userData.timeChasing = 0;
+      enemy.userData.stage = 0;
     }
-  } else if (enemy.data.stage == 3) {
+  } else if (enemy.userData.stage == 3) {
     updateGravity(enemy);
     enemy.position.y -= 0.05;
     const touchingGround = collisionAll(enemy, collisions);
     const bounce = collisionAll(enemy, trampolines);
     enemy.position.y += 0.05;
     if (touchingGround && !bounce) {
-      enemy.data.stage = 2;
+      enemy.userData.stage = 2;
       addRing("darkblue", enemy.position.x, enemy.position.y - 0.3, enemy.position.z, 0.05, 0.1, rings);
     } else if (bounce) {
       checkJump(enemy, {cansee: canSmartEnemySee(enemy, null).cansee, edge: false}, true);
-      if (enemy.data.stage == 3) {
-        enemy.data.gravity = -4;
+      if (enemy.userData.stage == 3) {
+        enemy.userData.gravity = -4;
       }
     }
   }
   
-  if (enemy.data.stage == 0 && res ? res.cansee : canSmartEnemySee(enemy, enemy.data.stage == 1 ? 20 : 15).cansee) {
-    enemy.data.seen = true;
-    enemy.data.lsx = x;
-    enemy.data.lsy = y;
-    enemy.data.lsz = z;
+  if (enemy.userData.stage == 0 && res ? res.cansee : canSmartEnemySee(enemy, enemy.userData.stage == 1 ? 20 : 15).cansee) {
+    enemy.userData.seen = true;
+    enemy.userData.lsx = x;
+    enemy.userData.lsy = y;
+    enemy.userData.lsz = z;
     
     character.position.set(x, y-0.2, z);
     characterTouchingGround = collisionAll(character, collisions);
     character.position.set(x, y, z);
-    if (characterTouchingGround && ((enemy.data.stage == 1 ? new THREE.Vector3(enemy.data.tx, enemy.data.ty, enemy.data.tz) : enemy.position)).distanceTo(character.position) < 20) {
-      enemy.data.lsgx = x;
-      enemy.data.lsgy = y;
-      enemy.data.lsgz = z;
+    if (characterTouchingGround && ((enemy.userData.stage == 1 ? new THREE.Vector3(enemy.userData.tx, enemy.userData.ty, enemy.userData.tz) : enemy.position)).distanceTo(character.position) < 20) {
+      enemy.userData.lsgx = x;
+      enemy.userData.lsgy = y;
+      enemy.userData.lsgz = z;
     }
   }
 
   for (let teleporter of teleporters) {
     if (collision(teleporter, enemy)) {
-      enemy.position.x = teleporter.data.tpx;
-      enemy.position.y = teleporter.data.tpy;
-      enemy.position.z = teleporter.data.tpz;
-      enemy.data.stage = 3;
-      enemy.data.gravity = 0;
-      enemy.data.timeChasing = 0;
+      enemy.position.x = teleporter.userData.tpx;
+      enemy.position.y = teleporter.userData.tpy;
+      enemy.position.z = teleporter.userData.tpz;
+      enemy.userData.stage = 3;
+      enemy.userData.gravity = 0;
+      enemy.userData.timeChasing = 0;
     }
   }
 }
 
 function checkJump(enemy, res, always=false) {
-  if (res.edge || enemy.data.timeChasing > 120 || Math.abs(res.cansee ? y : enemy.data.lsgy) - enemy.position.y > 0.25 || always) {
+  if (res.edge || enemy.userData.timeChasing > 120 || Math.abs(res.cansee ? y : enemy.userData.lsgy) - enemy.position.y > 0.25 || always) {
     if (res.cansee) {
       character.position.set(x, y-0.05, z);
       const characterTouchingGround = collisionAll(character, collisions);
@@ -881,22 +926,22 @@ function checkJump(enemy, res, always=false) {
       if (characterTouchingGround) {
         setJumpingEnemyTarget(enemy, x, y, z)
       }
-    } else if (enemy.data.seen) {
+    } else if (enemy.userData.seen) {
       let jump = true;
-      if (!(enemy.data.timeChasing > 120 || Math.abs(res.cansee ? y : enemy.data.lsgy) - enemy.position.y > 0.25 || always)) {
+      if (!(enemy.userData.timeChasing > 120 || Math.abs(res.cansee ? y : enemy.userData.lsgy) - enemy.position.y > 0.25 || always)) {
         const tempx = enemy.position.x;
         const tempy = enemy.position.y;
         const tempz = enemy.position.z;
-        jump = smartEnemyLogic(enemy, null, null, {x: enemy.data.lsgx, y: enemy.data.lsgy, z: enemy.data.lsgz}, false, null, true).edge;
+        jump = smartEnemyLogic(enemy, null, null, {x: enemy.userData.lsgx, y: enemy.userData.lsgy, z: enemy.userData.lsgz}, false, null, true).edge;
         enemy.position.x = tempx;
         enemy.position.y = tempy;
         enemy.position.z = tempz;
       }
       
       if (jump) {
-        const distEnemyLsg = enemy.position.distanceTo(new THREE.Vector3(enemy.data.lsgx, enemy.position.y, enemy.data.lsgz));
+        const distEnemyLsg = enemy.position.distanceTo(new THREE.Vector3(enemy.userData.lsgx, enemy.position.y, enemy.userData.lsgz));
         if (distEnemyLsg > 2 && distEnemyLsg < 21) {
-          setJumpingEnemyTarget(enemy, enemy.data.lsgx, enemy.data.lsgy, enemy.data.lsgz)
+          setJumpingEnemyTarget(enemy, enemy.userData.lsgx, enemy.userData.lsgy, enemy.userData.lsgz)
         }
       }
     }
@@ -905,12 +950,12 @@ function checkJump(enemy, res, always=false) {
 
 function updateGravity(enemy) {
   const tempy = enemy.position.y;
-  enemy.position.y -= enemy.data.gravity * 0.1;
-  enemy.data.gravity += 0.05;
+  enemy.position.y -= enemy.userData.gravity * 0.1;
+  enemy.userData.gravity += 0.05;
   if (collisionAll(enemy, collisions)) {
     let count = 0;
     while (collisionAll(enemy, collisions) && count < 10) {
-      if (enemy.data.gravity > 0) {
+      if (enemy.userData.gravity > 0) {
         enemy.position.y += 0.0025;
       } else {
         enemy.position.y -= 0.0025;
@@ -918,17 +963,17 @@ function updateGravity(enemy) {
       count += 1;
     }
     if (count == 10) enemy.position.y = tempy;
-    enemy.data.gravity = 0;
+    enemy.userData.gravity = 0;
   }
 }
 
 function setJumpingEnemyTarget(enemy, x, y, z) {
-  enemy.data.stage = 1;
-  enemy.data.timeChasing = 0;
-  enemy.data.gravity = -4;
-  enemy.data.tx = x;
-  enemy.data.ty = y;
-  enemy.data.tz = z;
+  enemy.userData.stage = 1;
+  enemy.userData.timeChasing = 0;
+  enemy.userData.gravity = -4;
+  enemy.userData.tx = x;
+  enemy.userData.ty = y;
+  enemy.userData.tz = z;
 }
 
 function canSmartEnemySee(enemy, maxDist=null) {
@@ -997,6 +1042,7 @@ function moveOnAxis(tx, tz) {
 }
 
 function respawn() {
+  doUIRender = true;
   startOfAttempt = Date.now();
   attempts += 1;
   const tmpTutorial = tutorial;
@@ -1005,15 +1051,15 @@ function respawn() {
   y = 4;
   character.position.set(x, y, z);
   if (tutorial == "Go back to the start to finish") tutorial = "Collect all the keys to complete the level";
-  if (level == 4) tutorial = "Escape the dungeon without being caught";
+  if (level == 2) tutorial = "Go around corners to hide from enemies";
   if (level == 3) tutorial = "";
+  if (level == 4) tutorial = "Escape the dungeon without being caught";
   if (level == 5) tutorial = "Defeat the boss to complete the level";
 }
 
 function nextLevel() {
   levelStarted = false;
   location = "win";
-  win = true;
   start = (Date.now() - start) / 1000;
   startOfAttempt = (Date.now() - startOfAttempt) / 1000;
   document.getElementById("leaderboard").className = "post";
@@ -1091,9 +1137,9 @@ function frame() {
 
     for (let teleporter of teleporters) {
       if (collision(character, teleporter)) {
-        x = teleporter.data.tpx;
-        y = teleporter.data.tpy;
-        z = teleporter.data.tpz;
+        x = teleporter.userData.tpx;
+        y = teleporter.userData.tpy;
+        z = teleporter.userData.tpz;
         character.position.set(x, y, z);
         gravity = 0;
       }
@@ -1109,6 +1155,7 @@ function frame() {
     character.position.set(x, y, z);
     for (let unstable of toConvert) {
       unstables.splice(unstables.indexOf(unstable), 1);
+      unstable.userData.isStill = false;
       falling.push(unstable);
       if (tutorial == "Escape the dungeon without being caught") tutorial = "Unstable platforms collapse when stood on";
     }
@@ -1172,8 +1219,11 @@ function frame() {
             addPlatform("blue", 0, 1.001, 25, 1, 1, 1, enemies);
           }
         }
+
         bossFightStarted = false;
         keysCount += 1;
+        doUIRender = true;
+
         if (keysCount == keysGoal && level !== 5) {
           addPlatform("darkorange", 0, 1, 0, 0.4, 0.4, 0.4, keys, false, false);
           if (tutorial == "Collect all the keys to complete the level" || tutorial == "Unstable platforms collapse when stood on" || level == 3) tutorial = "Go back to the start to finish";
@@ -1182,6 +1232,7 @@ function frame() {
         } else if (level === 5 && bossWave === 4) {
           let platform = platforms[4];
           platforms.splice(4, 1);
+          platform.userData.isStill = false;
           slowFalling.push(platform);
           tutorial = "Thanks for playing!";
         }
@@ -1273,7 +1324,7 @@ function frame() {
       }
     }
 
-    if (tutorial === "Thanks for playing!" && slowFalling[0].position.y < -5) nextLevel()
+    if (tutorial === "Thanks for playing!" && slowFalling[0].position.y < -5) nextLevel();
 
     for (let ring of rings) {
       const radius = ring.geometry.parameters.radius;
@@ -1289,67 +1340,72 @@ function frame() {
   
     if (y < -50 || collisionAll(character, enemies.concat(bosses.concat(jumpingEnemies))) || collisionAll(character, lava) || collisionAllRing(character, rings)) respawn();
   
-    ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = "#ffffff";
-    if (keysGoal != 0) {
-      ctx.textAlign = "left";
-      ctx.fillText("Keys: "+keysCount+"/"+(keysGoal+(level == 5 ? 1 : 0)), 30, 50);
-    }
-    ctx.textAlign = "right";
-    ctx.fillText("Level "+level, width-30, 50);
-    ctx.textAlign = "center";
-    ctx.fillText(tutorial, width/2, height-50);
-    
     doRender = true;
-  } else if (!win && !levelSelect && !leaderboard) {
-    ctx.clearRect(0, 0, width, height);
-    
-    ctx.textAlign = "center";
-    ctx.font = `70px "${FONT_NAME}"`;
-    for (let i = 0.5; i < 5; i += 0.1) {
-      ctx.beginPath();
-      ctx.fillStyle = "#cc0000";
-      ctx.rect(width/2+i-180, height/2+i-70, 15, 15);
-      ctx.fill();
+  }
+
+  if (location != renderedLocation) doUIRender = true;
+  if (locked && tutorial != renderedTutorial) doUIRender = true;
+  
+  if (doUIRender) {
+    if (location == "playing") {
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = "#ffffff";
+      if (keysGoal != 0) {
+        ctx.textAlign = "left";
+        ctx.fillText("Keys: "+keysCount+"/"+(keysGoal+(level == 5 ? 1 : 0)), 30, 50);
+      }
+      ctx.textAlign = "right";
+      ctx.fillText("Level "+level, width-30, 50);
+      ctx.textAlign = "center";
+      ctx.fillText(tutorial, width/2, height-50);
+    } else if (location == "pause") {
+      ctx.clearRect(0, 0, width, height);
+      
+      ctx.textAlign = "center";
+      ctx.font = `70px "${FONT_NAME}"`;
+      for (let i = 0.5; i < 5; i += 0.1) {
+        ctx.beginPath();
+        ctx.fillStyle = "#cc0000";
+        ctx.rect(width/2+i-180, height/2+i-70, 15, 15);
+        ctx.fill();
+        
+        ctx.beginPath();
+        ctx.fillStyle = "#000794";
+        ctx.rect(width/2+i+25, height/2+i-60, 15, 15);
+        ctx.fill();
+      }
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText("Cube Parkour", width/2, height/2);
       
       ctx.beginPath();
-      ctx.fillStyle = "#000794";
-      ctx.rect(width/2+i+25, height/2+i-60, 15, 15);
+      ctx.fillStyle = "red";
+      ctx.rect(width/2-180, height/2-70, 15, 15);
       ctx.fill();
-    }
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText("Cube Parkour", width/2, height/2);
-    
-    ctx.beginPath();
-    ctx.fillStyle = "red";
-    ctx.rect(width/2-180, height/2-70, 15, 15);
-    ctx.fill();
 
-    ctx.beginPath();
-    ctx.fillStyle = "blue";
-    ctx.rect(width/2+25, height/2-60, 15, 15);
-    ctx.fill();
-    
-    ctx.fillStyle = "#ffffff";
-    ctx.font = `35px "${FONT_NAME}"`;
+      ctx.beginPath();
+      ctx.fillStyle = "blue";
+      ctx.rect(width/2+25, height/2-60, 15, 15);
+      ctx.fill();
+      
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `35px "${FONT_NAME}"`;
 
-    if (!iframe) {
-      ctx.fillText("Click anywhere to play", width/2, height-50);
-      ctx.font = `35px "${FONT_NAME}"`;
-      ctx.textAlign = "left";
-      ctx.fillText("Level Select", 30, 50);
-      ctx.textAlign = "right";
-      ctx.fillText("Leaderboard", width-30, 50);
-      ctx.fillText("Music", width-30, height-70);
-      ctx.fillText("Settings", width-30, height-30);
-      ctx.font = `35px "${FONT_NAME}"`;
-      ctx.textAlign = "center";
-    } else {
-      ctx.fillText("Click anywhere to play", width/2, height-50);
-    }
-  } else if (win) {
-    ctx.clearRect(0, 0, width, height);
-    if (!posting) {
+      if (!iframe) {
+        ctx.fillText("Click anywhere to play", width/2, height-50);
+        ctx.font = `35px "${FONT_NAME}"`;
+        ctx.textAlign = "left";
+        ctx.fillText("Level Select", 30, 50);
+        ctx.textAlign = "right";
+        ctx.fillText("Leaderboard", width-30, 50);
+        ctx.fillText("Music", width-30, height-70);
+        ctx.fillText("Settings", width-30, height-30);
+        ctx.font = `35px "${FONT_NAME}"`;
+        ctx.textAlign = "center";
+      } else {
+        ctx.fillText("Click anywhere to play", width/2, height-50);
+      }
+    } else if (location == "win") {
+      ctx.clearRect(0, 0, width, height);
       ctx.textAlign = "center";
       
       ctx.fillStyle = "#ffffff";
@@ -1368,51 +1424,58 @@ function frame() {
   
       ctx.font = `35px "${FONT_NAME}"`;
       ctx.fillText("Click anywhere to continue", width/2, height-50);
-    } else {
-      ctx.font = `70px "${FONT_NAME}"`;
-      ctx.fillText("Loading...", width/2, height/2);
-    }
-  } else if (levelSelect) {
-    ctx.clearRect(0, 0, width, height);
-    
-    ctx.textAlign = "center";
-    ctx.font = `70px "${FONT_NAME}"`;
-    ctx.fillText("Level "+levelSelected, width/2, height/2);
-    ctx.fillStyle = levelSelected + 1 > Math.min(localStorage.getItem("levelUnlocked") || 1, MAX_LEVEL) ? "gray" : "white";
-    ctx.fillText("+", (width/2)+150, height/2);
-    ctx.fillStyle = levelSelected - 1 < 1 ? "gray" : "white";
-    ctx.fillText("-", (width/2)-150, height/2);
-    ctx.fillStyle = "white";
 
-    ctx.font = `35px "${FONT_NAME}"`;
-    ctx.fillText("Leaderboard", width/2, height/2 + 50);
-    if (levelSelected == (localStorage.getItem("levelUnlocked") || 1) && levelSelected < MAX_LEVEL) {
-      ctx.font = `33px "${FONT_NAME}"`;
-      ctx.fillText("Skip this level", width/2, height/2 + 85);
-    }
-    ctx.font = `35px "${FONT_NAME}"`;
-    ctx.fillText("Click anywhere to exit", width/2, height-50);
-  } else {
-    ctx.clearRect(0, 0, width, height);
-    let place;
-    if (leaderboardItems !== null) {
-      for (let i in leaderboardItems) {
-        ctx.fillText(leaderboardItems[i].username, width/2, 120 + i*30 + scrollPos);
-        place = parseInt(i)+1;
-        ctx.fillText("#"+place, width/2-250, 120 + i*30 + scrollPos);
-        ctx.fillText(leaderboardItems[i].time, width/2+250, 120 + i*30 + scrollPos);
-      }
-      ctx.clearRect(0, 0, width, 75);
-      ctx.clearRect(0, height-100, width, height);
-    } else {
+    } else if (location == "posting") {
+      ctx.clearRect(0, 0, width, height);
+      
       ctx.font = `70px "${FONT_NAME}"`;
       ctx.fillText("Loading...", width/2, height/2);
+    } else if (location == "select") {
+      ctx.clearRect(0, 0, width, height);
+      
+      ctx.textAlign = "center";
+      ctx.font = `70px "${FONT_NAME}"`;
+      ctx.fillText("Level "+levelSelected, width/2, height/2);
+      ctx.fillStyle = levelSelected + 1 > Math.min(localStorage.getItem("levelUnlocked") || 1, MAX_LEVEL) ? "gray" : "white";
+      ctx.fillText("+", (width/2)+150, height/2);
+      ctx.fillStyle = levelSelected - 1 < 1 ? "gray" : "white";
+      ctx.fillText("-", (width/2)-150, height/2);
+      ctx.fillStyle = "white";
+
+      ctx.font = `35px "${FONT_NAME}"`;
+      ctx.fillText("Leaderboard", width/2, height/2 + 50);
+      if (levelSelected == (localStorage.getItem("levelUnlocked") || 1) && levelSelected < MAX_LEVEL) {
+        ctx.font = `33px "${FONT_NAME}"`;
+        ctx.fillText("Skip this level", width/2, height/2 + 85);
+      }
+      ctx.font = `35px "${FONT_NAME}"`;
+      ctx.fillText("Click anywhere to exit", width/2, height-50);
+    } else if (location == "leaderboard") {
+      ctx.clearRect(0, 0, width, height);
+      let place;
+      if (leaderboardItems !== null) {
+        for (let i in leaderboardItems) {
+          ctx.fillText(leaderboardItems[i].username, width/2, 120 + i*30 + scrollPos);
+          place = parseInt(i)+1;
+          ctx.fillText("#"+place, width/2-250, 120 + i*30 + scrollPos);
+          ctx.fillText(leaderboardItems[i].time, width/2+250, 120 + i*30 + scrollPos);
+        }
+        ctx.clearRect(0, 0, width, 75);
+        ctx.clearRect(0, height-100, width, height);
+      } else {
+        ctx.font = `70px "${FONT_NAME}"`;
+        ctx.fillText("Loading...", width/2, height/2);
+      }
+      ctx.font = `35px "${FONT_NAME}"`;
+      ctx.fillText("Level "+levelSelected, width/2, 50);
+      ctx.fillText("-", width/2-250, 50);
+      ctx.fillText("+", width/2+250, 50);
+      ctx.fillText("Click anywhere to exit", width/2, height-50);
     }
-    ctx.font = `35px "${FONT_NAME}"`;
-    ctx.fillText("Level "+levelSelected, width/2, 50);
-    ctx.fillText("-", width/2-250, 50);
-    ctx.fillText("+", width/2+250, 50);
-    ctx.fillText("Click anywhere to exit", width/2, height-50);
+
+    doUIRender = false;
+    renderedLocation = location;
+    renderedTutorial = tutorial;
   }
 
   if (doRender) render();
@@ -1459,7 +1522,6 @@ function render() {
 }
 
 async function postScore() {
-  posting = true;
   location = "posting";
   document.getElementById("leaderboard").className = "post hidden";
   const data = await fetch(`${SERVER_URL}/add`, {
@@ -1481,6 +1543,7 @@ async function getLeaderboard(level, username=null) {
     }),
   }).then(res => res.json());
   leaderboardItems = data;
+  doUIRender = true;
   if (username !== null) {
     scrollPos = (leaderboardItems.indexOf(leaderboardItems.find(item => item.username === username)) * -30) - 15;
     scrollPos = Math.min(0, Math.max(height-200-(leaderboardItems.length * 30), scrollPos));
@@ -1491,8 +1554,6 @@ async function getLeaderboard(level, username=null) {
 
 async function startAudio() {
   theme.play().then(_ => {
-    playing = true;
-
     setInterval(() => {
       if (theme.currentTime > END_POS) {
         theme.pause();
@@ -1514,8 +1575,8 @@ async function audioLoad() {
 document.getElementById("leaderboard").onclick = postScore;
 
 canvas.onclick = canvasText.onclick = async event => {
-  if (!iframe && !locked) {
-    if (!win && !levelSelect && !leaderboard) {
+  if (!iframe) {
+    if (location == "pause") {
       if (event.clientY > 70 || (event.clientX > 240 && event.clientX < width-240)) {
         if (!levelStarted) {
           attempts = 1;
@@ -1526,47 +1587,43 @@ canvas.onclick = canvasText.onclick = async event => {
         controls.lock();
       } else {
         if (event.clientX - (width/2) < 0) {
-          levelSelect = true;
           location = "select";
           levelSelected = level;
         } else {
-          leaderboard = true;
           location = "leaderboard";
           levelSelected = 1;
           getLeaderboard(levelSelected);
           scrollPos = 0;
         }
       }
-    } else if (win && !posting) {
+    } else if (location == "win") {
       level = level === MAX_LEVEL ? 1 : level + 1;
       setup(level);
-      win = false;
-      location = "locked";
+      location = "pause";
       document.getElementById("leaderboard").className = "post hidden";
-    } else if (levelSelect) {
+    } else if (location == "select") {
       if (Math.abs(event.clientY - ((height/2)-25)) < 30 && Math.abs(event.clientX - (width/2)) < 250) {
         if (event.clientX - (width/2) > 0) {
+          doUIRender = true;
           levelSelected += 1;
           if (levelSelected > Math.min(localStorage.getItem("levelUnlocked") || 1, MAX_LEVEL)) {
             levelSelected -= 1;
           }
         } else {
+          doUIRender = true;
           levelSelected -= 1;
           if (levelSelected < 1) {
             levelSelected += 1;
           }
         }
       } else if (Math.abs(event.clientY - ((height/2)+30)) < 20 && Math.abs(event.clientX - (width/2)) < 100) {
-        levelSelect = false;
-        leaderboard = true;
         location = "leaderboard";
         getLeaderboard(levelSelected);
         scrollPos = 0;
       } else if (Math.abs(event.clientY - ((height/2)+65)) < 20 && Math.abs(event.clientX - (width/2)) < 100 && levelSelected == (localStorage.getItem("levelUnlocked") || 1) && levelSelected < MAX_LEVEL) {
         skipLevel(true);
       } else {
-        levelSelect = false;
-        location = "locked";
+        location = "pause";
         if (level !== levelSelected) {
           level = levelSelected;
           setup(level);
@@ -1574,9 +1631,10 @@ canvas.onclick = canvasText.onclick = async event => {
           levelStarted = false;
         }
       }
-    } else {
+    } else if (location == "leaderboard")  {
       if (event.clientY < 100 && Math.abs(event.clientX - (width/2)) < 300) {
         if (event.clientX - (width/2) > 0) {
+          doUIRender = true;
           levelSelected += 1;
           if (levelSelected > MAX_LEVEL) {
             levelSelected -= 1;
@@ -1585,6 +1643,7 @@ canvas.onclick = canvasText.onclick = async event => {
             scrollPos = 0;
           }
         } else {
+          doUIRender = true;
           levelSelected -= 1;
           if (levelSelected < 1) {
             levelSelected += 1;
@@ -1594,11 +1653,10 @@ canvas.onclick = canvasText.onclick = async event => {
           }
         }
       } else {
-        leaderboard = false;
-        location = "locked";
+        location = "pause";
       }
     }
-  } else if (iframe) {
+  } else {
     if (IFRAME_REDIRECT !== null) window.open(IFRAME_REDIRECT);
   }
 }
@@ -1612,20 +1670,25 @@ controls.addEventListener("lock", () => {
 
 controls.addEventListener("unlock", () => {
   locked = false;
-  location = "locked";
-  document.getElementById("licence").className = "licence";
+  if (location == "playing") {
+    location = "pause";
+    document.getElementById("licence").className = "licence";
+  }
 });
 
 window.addEventListener("keydown", event => keysPressed.add(event.code));
 window.addEventListener("keyup", event => keysPressed.delete(event.code));
 
 window.addEventListener("mousemove", event => {
-  if (locked && tutorial == "Move the mouse to look around") tutorial = "Press the Arrow Keys/WASD to move";
+  if (location == "playing" && tutorial == "Move the mouse to look around") tutorial = "Press the Arrow Keys/WASD to move";
 });
 
 window.addEventListener("wheel", event => {
-  scrollPos += event.wheelDelta/3;
-  scrollPos = Math.min(0, Math.max(height-200-(leaderboardItems.length * 30), scrollPos));
+  if (location == "leaderboard") {
+    doUIRender = true;
+    scrollPos += event.wheelDelta/3;
+    scrollPos = Math.min(0, Math.max(height-200-(leaderboardItems.length * 30), scrollPos));
+  }
 });
 
 window.addEventListener("resize", () => {
@@ -1636,6 +1699,7 @@ window.addEventListener("resize", () => {
 	camera.updateProjectionMatrix();
 	renderer.setSize(width, height);
   doRender = true;
+  doUIRender = true;
   
   canvasText.width = width;
   canvasText.height = height;
@@ -1657,6 +1721,9 @@ let keysCount = 0;
 let keysGoal = 0;
 
 let doRender = false;
+let doUIRender = true;
+let renderedLocation = "";
+let renderedTutorial = "";
 
 let tick = 0;
 let bossTick = 0;
@@ -1668,12 +1735,8 @@ let keysPressed = new Set();
 
 let tutorial = "";
 
-let location = "locked";
+let location = "pause"; // pause, playing, win, posting, leaderboard, select
 let locked = false;
-let win = false;
-let posting = false;
-let leaderboard = false;
-let levelSelect = false;
 if (DEBUG) setInterval(() => console.log(location), 10)
 
 let levelSelected = 1;
@@ -1688,14 +1751,12 @@ let iframe = window.self !== window.top && IFRAME_REDIRECT !== null;
 let level = Math.min(localStorage.getItem("level") || 1, MAX_LEVEL);
 const enableEnemies = true;
 
-let playing = false;
 let theme;
 
 const command = window.location.hash ? window.location.hash.substring(1) : "";
 try {
   const commands = command.split(",");
   if (commands[0] == "leaderboard" && commands[1] && commands[2] && parseInt(commands[2])) {
-    leaderboard = true;
     location = "leaderboard";
     levelSelected = parseInt(commands[2]);
     getLeaderboard(levelSelected, commands[1]);
