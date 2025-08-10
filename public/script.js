@@ -1077,6 +1077,7 @@ function skipLevel(inSelection) {
   if (locked) {
     controls.unlock();
   } else {
+    doUIRender = true;
     levelSelected = level;
   }
 }
