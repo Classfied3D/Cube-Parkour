@@ -14,7 +14,7 @@ const FONT_FILE = "https://fonts.gstatic.com/s/sofiasans/v10/Yq6E-LCVXSLy9uPBwlA
 const FONT_NAME = "Sofia Sans";
 
 const AUDIO_URL = "https://cdn.jsdelivr.net/gh/Classfied3D/Cube-Parkour@7e37e2d/public/audio/theme1.mp3";
-const END_POS = 66.2;
+const END_POS = 66.17;
 const REPEAT_POS = 34.3;
 
 const DEBUG = false;
@@ -23,6 +23,9 @@ const FPS_INTERVAL = 1000 / 60;
 const FPS_CAP = true;
 
 const MAX_LEVEL = 6;
+
+const MAX_CAMERA_DEG = 0.1; // The maximum amount of degrees the camera can deviate from the vertical
+                            // This prevents movement code from moving the player north when directly overhead
 
 let width = window.innerWidth;
 let height = window.innerHeight;
@@ -54,6 +57,8 @@ scene.background = skybox;*/
 
 const camera = new THREE.PerspectiveCamera(65, width / height, 1, 1000);
 const controls = new PointerLockControls(camera, document.body);
+controls.minPolarAngle = THREE.MathUtils.degToRad(MAX_CAMERA_DEG);
+controls.maxPolarAngle = THREE.MathUtils.degToRad(180-MAX_CAMERA_DEG);
 
 const character = new THREE.Mesh(
   new THREE.BoxGeometry(1, 1, 1),
@@ -62,8 +67,6 @@ const character = new THREE.Mesh(
 character.userData.isStill = false;
 character.castShadow = false;
 scene.add(character);
-
-let aPoint = new THREE.Vector3();
 
 let collisions = [];
 let sightCollisions = [];
@@ -622,16 +625,17 @@ function collisionAll(a, collisions) {
 
 function collisionPoint(a, b/*, updateMatrix=true*/) {
   //if (updateMatrix) scene.updateMatrixWorld(true);
+  let bBox;
+  if (b.userData.isStill) {
+    bBox = b.userData.staticBox;
+  } else {
+    if (!b.geometry.boundingBox) b.geometry.computeBoundingBox();
+    bBox = b.geometry.boundingBox.clone();
+    bBox.min.add(b.position);
+    bBox.max.add(b.position);
+  }
 
-  let aPoint = a.position.clone();
-
-  if (!b.geometry.boundingBox) b.geometry.computeBoundingBox();
-  
-  let bBox = b.geometry.boundingBox.clone();
-  bBox.min.add(b.position);
-  bBox.max.add(b.position);
-
-  return bBox.containsPoint(aPoint);
+  return bBox.containsPoint(a.position);
 }
 
 function collisionAllPoint(a, collisions) {
@@ -700,14 +704,64 @@ function movePlatform(platform, tx, ty, tz) {
 }
 
 function move(tx, ty, tz) {
+  if (tx == 0 && ty == 0 && tz == 0) return;
   for (let i = 0; i < 6; i++) {
     character.position.set(x+(tx/5), y+(ty/5), z+(tz/5));
     if (!collisionAll(character, collisions)) {
       x += tx / 5;
       y += ty / 5;
       z += tz / 5;
+    } else {
+      break;
     }
   }
+}
+
+/*function moveOnAxis(tx, tz) {
+  character.lookAt(
+    controls.object.position.x,
+    y,
+    controls.object.position.z,
+  );
+  character.translateX(-tx);
+  character.translateZ(-tz);
+  character.rotation.x = 0;
+  character.rotation.y = 0;
+  character.rotation.z = 0;
+  tx = character.position.x - x;
+  tz = character.position.z - z;
+  character.position.set(x, y, z);
+  move(tx, 0, 0);
+  move(0, 0, tz);
+  xVel += tx / 6;
+  zVel += tz / 6;
+  xVel = Math.min(xVel, 0.15*(1/Math.sqrt(2)));
+  zVel = Math.min(zVel, 0.15*(1/Math.sqrt(2)));
+}*/
+
+function moveOnAxis(tx, tz) {
+  const forward = new THREE.Vector3();
+  controls.object.getWorldDirection(forward);
+  forward.y = 0;
+  forward.normalize();
+
+  const right = new THREE.Vector3();
+  right.crossVectors(new THREE.Vector3(0, 1, 0), forward).normalize();
+
+  character.position.addScaledVector(right, tx);
+  character.position.addScaledVector(forward, tz);
+
+  tx = character.position.x - x;
+  tz = character.position.z - z;
+
+  character.position.set(x, y, z);
+  move(tx, 0, 0);
+  move(0, 0, tz);
+
+  xVel += tx / 6;
+  zVel += tz / 6;
+  xVel = Math.min(xVel, 0.15 / Math.sqrt(2));
+  zVel = Math.min(zVel, 0.15 / Math.sqrt(2));
 }
 
 function enemyLogic(enemy, maxDist=null, speed=null) {
@@ -1017,28 +1071,6 @@ function moveSmartEnemy(enemy, tx, tz, jumping=false) {
   }
   enemy.position.set(ex, ey, ez);
   return false;
-}
-
-function moveOnAxis(tx, tz) {
-  character.lookAt(
-    controls.object.position.x,
-    y,
-    controls.object.position.z,
-  );
-  character.translateX(-tx);
-  character.translateZ(-tz);
-  character.rotation.x = 0;
-  character.rotation.y = 0;
-  character.rotation.z = 0;
-  tx = character.position.x - x;
-  tz = character.position.z - z;
-  character.position.set(x, y, z);
-  move(tx, 0, 0);
-  move(0, 0, tz);
-  xVel += tx / 6;
-  zVel += tz / 6;
-  xVel = Math.min(xVel, 0.15*(1/Math.sqrt(2)));
-  zVel = Math.min(zVel, 0.15*(1/Math.sqrt(2)));
 }
 
 function respawn() {
