@@ -96,17 +96,18 @@ const teleporters = []; // teleporters
 function addPlatform(color, x, y, z, width, height, depth, type, invisible=false, setLighting=null, data={}) {
   let platform;
   setLighting = setLighting === null ? lighting : setLighting;
-  if (!setLighting) {
+  if (setLighting) {
+    platform = new THREE.Mesh(
+      new THREE.BoxGeometry(width, height, depth),
+      new THREE.MeshLambertMaterial({color: color}),
+    );
+    platform.castShadow = true;
+  } else {
     platform = new THREE.Mesh(
       new THREE.BoxGeometry(width, height, depth),
       new THREE.MeshBasicMaterial({color: color}),
     );
     platform.castShadow = false;
-  } else {
-    platform = new THREE.Mesh(
-      new THREE.BoxGeometry(width, height, depth),
-      new THREE.MeshStandardMaterial({color: color}),
-    );
   }
   platform.position.set(x, y, z);
   platform.userData = data;
@@ -567,8 +568,10 @@ function resetEnemies(level) {
 function setLighting(level) {
   if (level == 4) {
     lighting = true;
+    renderer.shadowMap.enabled = true;
   } else {
     lighting = false;
+    renderer.shadowMap.enabled = false;
   }
   if (lighting || level == 5) {
     //character.material = new THREE.MeshStandardMaterial({color: "red"});
@@ -717,28 +720,6 @@ function move(tx, ty, tz) {
   }
 }
 
-/*function moveOnAxis(tx, tz) {
-  character.lookAt(
-    controls.object.position.x,
-    y,
-    controls.object.position.z,
-  );
-  character.translateX(-tx);
-  character.translateZ(-tz);
-  character.rotation.x = 0;
-  character.rotation.y = 0;
-  character.rotation.z = 0;
-  tx = character.position.x - x;
-  tz = character.position.z - z;
-  character.position.set(x, y, z);
-  move(tx, 0, 0);
-  move(0, 0, tz);
-  xVel += tx / 6;
-  zVel += tz / 6;
-  xVel = Math.min(xVel, 0.15*(1/Math.sqrt(2)));
-  zVel = Math.min(zVel, 0.15*(1/Math.sqrt(2)));
-}*/
-
 function moveOnAxis(tx, tz) {
   const forward = new THREE.Vector3();
   controls.object.getWorldDirection(forward);
@@ -772,21 +753,22 @@ function enemyLogic(enemy, maxDist=null, speed=null) {
     const tempx = enemy.position.x;
     const tempy = enemy.position.y;
     const tempz = enemy.position.z;
+
+    let moveVec = new THREE.Vector3()
+      .subVectors(character.position, enemy.position)
+      .normalize()
+      .multiplyScalar(0.5);
     while (!collisionAllPoint(enemy, sightCollisions) && !collision(enemy, character)) {
-      enemy.lookAt(character.position);
-      enemy.translateZ(0.2);
-      enemy.rotation.set(0, 0, 0);
+      enemy.position.add(moveVec);
     }
     
     if (collision(enemy, character)) {
       if (tutorial == "Go around corners to hide from enemies") tutorial = "";
+      moveVec = moveVec.normalize()
+        .multiplyScalar(Math.min(speed, distance));
       enemy.position.set(tempx, tempy, tempz);
-      enemy.lookAt(
-        character.position.x,
-        tempy,
-        character.position.z,
-      );
-      enemy.translateZ(Math.min(speed, distance));
+      enemy.position.add(moveVec);
+
       let tx = enemy.position.x-tempx;
       let tz = enemy.position.z-tempz;
       enemy.position.set(tempx, tempy, tempz);
@@ -800,18 +782,19 @@ function enemyLogic(enemy, maxDist=null, speed=null) {
 }
 
 function moveEnemy(enemy, tx, tz) {
-  let otherEnemies = enemies.map(x => x).concat(bosses.map(x => x));
+  let otherEnemies = enemies.map(x => x).concat(bosses.map(x => x)).concat(jumpingEnemies.map(x => x));
   otherEnemies.splice(otherEnemies.indexOf(enemy), 1);
   let ex = enemy.position.x;
   let ey = enemy.position.y;
   let ez = enemy.position.z;
-  for (let i = 0; i < 6; i++) {
-    enemy.position.set(ex+(tx/5), ey, ez+(tz/5));
+  
+  for (let i = 0; i < 4; i++) {
+    enemy.position.set(ex+(tx/3), ey, ez+(tz/3));
     if (!(collisionAll(enemy, collisions) || collisionAll(enemy, otherEnemies))) {
       enemy.position.y -= 0.05
       if (collisionAll(enemy, collisions)) {
-        ex += tx / 5;
-        ez += tz / 5;
+        ex += tx / 3;
+        ez += tz / 3;
       }
     }
   }
@@ -1037,14 +1020,14 @@ function canSmartEnemySee(enemy, maxDist=null) {
     const tempx = enemy.position.x;
     const tempy = enemy.position.y;
     const tempz = enemy.position.z;
-    while (!collisionAllPoint(enemy, sightCollisions) && !collision(enemy, character)) {
-      enemy.lookAt(character.position);
-      enemy.translateZ(0.2);
-      enemy.rotation.set(0, 0, 0);
-    }
+    let moveVec = new THREE.Vector3()
+      .subVectors(character.position, enemy.position)
+      .normalize()
+      .multiplyScalar(0.5);
+    while (!collisionAllPoint(enemy, sightCollisions) && !collision(enemy, character))
+      enemy.position.add(moveVec);
     const res = {cansee: collision(enemy, character), distance: distance};
     enemy.position.set(tempx, tempy, tempz);
-    enemy.rotation.set(0, 0, 0);
     return res;
   }
   return {cansee: false, distance: distance};
@@ -1549,7 +1532,7 @@ function render() {
   cameraVector.z = distance;
   positionCamera(cameraVector, distance);
   
-  if (Math.abs((camera.rotation.x/Math.PI)+0.2) < 0.02) camera.position.z -= 0.001;
+  //if (Math.abs((camera.rotation.x/Math.PI)+0.2) < 0.02) camera.position.z -= 0.001;
   
   renderer.render(scene, camera);
 }
