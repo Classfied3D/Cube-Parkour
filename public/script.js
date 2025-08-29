@@ -5,12 +5,13 @@
  */
 
 import * as THREE from "three";
-import {PointerLockControls} from "three/pointerlock";
+import { PointerLockControls } from "three/pointerlock";
 
 const IFRAME_REDIRECT = "https://cube-parkour.classfied3d.repl.co/";
 const SERVER_URL = "https://cube-parkour-leaderboard.classfied3d.repl.co";
 
-const FONT_FILE = "https://fonts.gstatic.com/s/sofiasans/v10/Yq6E-LCVXSLy9uPBwlAThu1SY8Cx8rlT69B6sJ3qpPOgW08lfLY.woff2";
+const FONT_FILE =
+  "https://fonts.gstatic.com/s/sofiasans/v10/Yq6E-LCVXSLy9uPBwlAThu1SY8Cx8rlT69B6sJ3qpPOgW08lfLY.woff2";
 const FONT_NAME = "Sofia Sans";
 
 const COMMIT_HASH = "610bcc888e6410ec87aad3a35e7dec14028831e4";
@@ -25,14 +26,18 @@ const FPS_CAP = true;
 
 const MAX_LEVEL = 6;
 
+const MIN_OPACITY_DIST = 1;
+const MAX_OPACITY_DIST = 3;
+const FADE_LERP_SPEED = 0.2;
+const NEAR_CLIPPING_DIST = 0.02;
 const MAX_CAMERA_DEG = 0.1; // The maximum amount of degrees the camera can deviate from the vertical
-                            // This prevents movement code from moving the player north when directly overhead
+// This prevents movement code from moving the player north when directly overhead
 
 let width = window.innerWidth;
 let height = window.innerHeight;
 
 const canvas = document.getElementById("c");
-const renderer = new THREE.WebGLRenderer({canvas, antialias: true});
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 //renderer.physicallyCorrectLights = true;
 renderer.setSize(width, height);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
@@ -56,14 +61,23 @@ const skybox = loader.load([
 ]);
 scene.background = skybox;*/
 
-const camera = new THREE.PerspectiveCamera(65, width / height, 1, 1000);
+const camera = new THREE.PerspectiveCamera(
+  65,
+  width / height,
+  NEAR_CLIPPING_DIST,
+  1000,
+);
 const controls = new PointerLockControls(camera, document.body);
 controls.minPolarAngle = THREE.MathUtils.degToRad(MAX_CAMERA_DEG);
-controls.maxPolarAngle = THREE.MathUtils.degToRad(180-MAX_CAMERA_DEG);
+controls.maxPolarAngle = THREE.MathUtils.degToRad(180 - MAX_CAMERA_DEG);
 
 const character = new THREE.Mesh(
   new THREE.BoxGeometry(1, 1, 1),
-  new THREE.MeshBasicMaterial({color: "red"}),
+  new THREE.MeshBasicMaterial({
+    color: "red",
+    transparent: true,
+    opacity: 1,
+  }),
 );
 character.userData.isStill = false;
 character.castShadow = false;
@@ -94,37 +108,50 @@ const invisible = []; // invisible platforms
 const triggers = []; // trigger which initiates the boss
 const teleporters = []; // teleporters
 
-function addPlatform(color, x, y, z, width, height, depth, type, invisible=false, setLighting=null, data={}) {
+function addPlatform(
+  color,
+  x,
+  y,
+  z,
+  width,
+  height,
+  depth,
+  type,
+  invisible = false,
+  setLighting = null,
+  data = {},
+) {
   let platform;
   setLighting = setLighting === null ? lighting : setLighting;
   if (setLighting) {
     platform = new THREE.Mesh(
       new THREE.BoxGeometry(width, height, depth),
-      new THREE.MeshLambertMaterial({color: color}),
+      new THREE.MeshLambertMaterial({ color: color }),
     );
     platform.castShadow = true;
   } else {
     platform = new THREE.Mesh(
       new THREE.BoxGeometry(width, height, depth),
-      new THREE.MeshBasicMaterial({color: color}),
+      new THREE.MeshBasicMaterial({ color: color }),
     );
     platform.castShadow = false;
   }
   platform.position.set(x, y, z);
   platform.userData = data;
   platform.geometry.computeBoundingBox();
-  
+
   platform.userData.isStill = !(
-    type === enemies
-    || type === jumpingEnemies
-    || type === bosses
-    || type === falling
-    || type === slowFalling
-    || type === rings
-    || type === playerLights
-    || type === movingX
-    || type === movingY
-    || type === movingZ);
+    type === enemies ||
+    type === jumpingEnemies ||
+    type === bosses ||
+    type === falling ||
+    type === slowFalling ||
+    type === rings ||
+    type === playerLights ||
+    type === movingX ||
+    type === movingY ||
+    type === movingZ
+  );
 
   if (platform.userData.isStill) {
     platform.userData.staticBox = platform.geometry.boundingBox.clone();
@@ -142,18 +169,29 @@ function addLight(color, x, y, z, power, decay, rotation, type) {
   light.power = power;
   light.decay = decay;
   light.distance = Infinity;
-  light.rotation.y = rotation*(Math.PI/180);
+  light.rotation.y = rotation * (Math.PI / 180);
   scene.add(light);
   type.push(light);
 }
 
-function addLightRect(color, x, y, z, width, height, power, decay, rotation, type) {
+function addLightRect(
+  color,
+  x,
+  y,
+  z,
+  width,
+  height,
+  power,
+  decay,
+  rotation,
+  type,
+) {
   const light = new THREE.PointLight(color, 100, width, height);
   light.position.set(x, y, z);
   light.power = power;
   light.decay = decay;
   light.distance = Infinity;
-  light.rotation.z = rotation*(Math.PI/180);
+  light.rotation.z = rotation * (Math.PI / 180);
   scene.add(light);
   type.push(light);
 }
@@ -166,10 +204,10 @@ function addLava(x, y, z, width, height, depth) {
 function addRing(color, x, y, z, radius, tube, type) {
   const platform = new THREE.Mesh(
     new THREE.TorusGeometry(radius, tube, 16, 100),
-    new THREE.MeshBasicMaterial({color: color}),
+    new THREE.MeshBasicMaterial({ color: color }),
   );
   platform.position.set(x, y, z);
-  platform.rotation.x = Math.PI/2;
+  platform.rotation.x = Math.PI / 2;
   scene.add(platform);
   type.push(platform);
 }
@@ -189,7 +227,7 @@ function setup(level) {
   camera.rotation.y = Math.PI;
   camera.rotation.z = 0;
   doRender = true;
-  
+
   for (let platform of platforms) removeObject(platform);
   for (let trampoline of trampolines) removeObject(trampoline);
   for (let nonSolid of nonSolids) removeObject(nonSolid);
@@ -225,7 +263,7 @@ function setup(level) {
   teleporters.splice(0, teleporters.length);
 
   setLighting(level);
-  
+
   if (level == 1) {
     tutorial = "Move the mouse to look around";
     addPlatform("green", 0, 0, 0, 1.5, 1, 1.5, platforms);
@@ -392,7 +430,18 @@ function setup(level) {
     addPlatform("black", -33, 0, -29.75, 1.5, 1, 1.5, platforms);
     addPlatform("black", -33, 0, -25.75, 1.5, 1, 1.5, platforms);
     addPlatform("black", -33, 0, -21.75, 1.5, 1, 1.5, platforms);
-    addPlatform(0xc7c934, -33, 0, -17.75, 1.5, 1, 1.5, trampolines, false, false);
+    addPlatform(
+      0xc7c934,
+      -33,
+      0,
+      -17.75,
+      1.5,
+      1,
+      1.5,
+      trampolines,
+      false,
+      false,
+    );
   } else if (level == 5) {
     tutorial = "Defeat the boss to complete the level";
     addPlatform("black", 0, 0, 0, 1.5, 1, 1.5, platforms);
@@ -428,18 +477,50 @@ function setup(level) {
     addPlatform(0x361704, 25, 36, -4, 1.5, 1, 1.5, unstables);
     addPlatform(0x361704, 33, 36, -4, 1.5, 1, 1.5, unstables);
     addPlatform("green", 41, 36, -4, 1.5, 1, 1.5, platforms);
-    addPlatform(0xcc55d9, 41, 37, -4, 0.4, 0.4, 0.4, teleporters, false, null, {tpx: 50, tpy: 10, tpz: 50});
+    addPlatform(0xcc55d9, 41, 37, -4, 0.4, 0.4, 0.4, teleporters, false, null, {
+      tpx: 50,
+      tpy: 10,
+      tpz: 50,
+    });
     addPlatform("green", 39, 1.5, 0, 1.5, 1, 1.5, platforms);
     addPlatform("green", 48.3, 1.5, 0, 1.5, 1, 1.5, platforms);
     addPlatform("green", 57.6, 1.5, 0, 1.5, 1, 1.5, platforms);
-    addPlatform(0xcc55d9, 57.8, 2.5, 0, 0.4, 0.4, 0.4, teleporters, false, null, {tpx: 0, tpy: 10, tpz: 0});
+    addPlatform(
+      0xcc55d9,
+      57.8,
+      2.5,
+      0,
+      0.4,
+      0.4,
+      0.4,
+      teleporters,
+      false,
+      null,
+      { tpx: 0, tpy: 10, tpz: 0 },
+    );
     addPlatform("green", 50, 0, 50, 1.5, 1, 1.5, platforms);
     addPlatform("green", 42, 0, 50, 1.5, 1, 1.5, platforms);
     addPlatform("green", 34, 0, 50, 1.5, 1, 1.5, platforms);
     addPlatform("green", 50, 0, 42, 1.5, 1, 1.5, platforms);
-    addPlatform(0xcc55d9, 50, 1, 42, 0.4, 0.4, 0.4, teleporters, false, null, {tpx: 0, tpy: 10, tpz: 0});
+    addPlatform(0xcc55d9, 50, 1, 42, 0.4, 0.4, 0.4, teleporters, false, null, {
+      tpx: 0,
+      tpy: 10,
+      tpz: 0,
+    });
     addPlatform(0xc2f1ff, 0, 0, -12, 1.5, 1, 1.5, ices);
-    addPlatform(0xcc55d9, -3, -47, -17.5, 0.4, 0.4, 0.4, teleporters, false, null, {tpx: 0, tpy: 10, tpz: 0});
+    addPlatform(
+      0xcc55d9,
+      -3,
+      -47,
+      -17.5,
+      0.4,
+      0.4,
+      0.4,
+      teleporters,
+      false,
+      null,
+      { tpx: 0, tpy: 10, tpz: 0 },
+    );
   } else {
     addPlatform("green", 0, 0, 0, 1.5, 1, 1.5, platforms);
   }
@@ -552,8 +633,36 @@ function resetEnemies(level) {
   } else if (level == 5) {
     addPlatform("blue", 0, 2, 30, 3, 3, 3, bosses);
   } else if (level == 6) {
-    addPlatform("blue", 7, 2, 27, 1, 1, 1, jumpingEnemies, false, null, {gravity: 0, stage: 0, timeChasing: 0, tx: 0, ty: 0, tz: 0, seen: false, lsx: 0, lsy: 0, lsz: 0, lsgx: 0, lsgy: 0, lsgz: 0});
-    addPlatform("blue", 42, 1, 50, 1, 1, 1, jumpingEnemies, false, null, {gravity: 0, stage: 0, timeChasing: 0, tx: 0, ty: 0, tz: 0, seen: false, lsx: 0, lsy: 0, lsz: 0, lsgx: 0, lsgy: 0, lsgz: 0});
+    addPlatform("blue", 7, 2, 27, 1, 1, 1, jumpingEnemies, false, null, {
+      gravity: 0,
+      stage: 0,
+      timeChasing: 0,
+      tx: 0,
+      ty: 0,
+      tz: 0,
+      seen: false,
+      lsx: 0,
+      lsy: 0,
+      lsz: 0,
+      lsgx: 0,
+      lsgy: 0,
+      lsgz: 0,
+    });
+    addPlatform("blue", 42, 1, 50, 1, 1, 1, jumpingEnemies, false, null, {
+      gravity: 0,
+      stage: 0,
+      timeChasing: 0,
+      tx: 0,
+      ty: 0,
+      tz: 0,
+      seen: false,
+      lsx: 0,
+      lsy: 0,
+      lsz: 0,
+      lsgx: 0,
+      lsgy: 0,
+      lsgz: 0,
+    });
   }
   for (let enemy of enemies) {
     enemy.position.y += 0.001;
@@ -583,7 +692,7 @@ function setLighting(level) {
   }
 }
 
-function collision(a, b/*, updateMatrix=true*/) {
+function collision(a, b /*, updateMatrix=true*/) {
   // Usually updating the matrix would be required but it is expensive and we don't need it in this case
   //if (updateMatrix) scene.updateMatrixWorld(true);
 
@@ -597,7 +706,7 @@ function collision(a, b/*, updateMatrix=true*/) {
     aBox.min.add(a.position);
     aBox.max.add(a.position);
   }
-  
+
   if (b.userData.isStill) {
     bBox = b.userData.staticBox;
   } else {
@@ -621,13 +730,13 @@ function collisionAll(a, collisions) {
     a.userData.isStill = true;
   }
 
-  const res = collisions.some(b => collision(a, b/*, false*/));
-  
+  const res = collisions.some((b) => collision(a, b /*, false*/));
+
   if (moving) a.userData.isStill = false;
-  return res
+  return res;
 }
 
-function collisionPoint(a, b/*, updateMatrix=true*/) {
+function collisionPoint(a, b /*, updateMatrix=true*/) {
   //if (updateMatrix) scene.updateMatrixWorld(true);
   let bBox;
   if (b.userData.isStill) {
@@ -644,35 +753,41 @@ function collisionPoint(a, b/*, updateMatrix=true*/) {
 
 function collisionAllPoint(a, collisions) {
   //scene.updateMatrixWorld(true);
-  return collisions.some(b => collisionPoint(a, b/*, false*/));
+  return collisions.some((b) => collisionPoint(a, b /*, false*/));
 }
 
 function collisionRing(a, b) {
-  const distance = a.position.distanceTo(new THREE.Vector3(b.position.x, a.position.y, b.position.z));
+  const distance = a.position.distanceTo(
+    new THREE.Vector3(b.position.x, a.position.y, b.position.z),
+  );
   const radius = b.geometry.parameters.radius;
   const tube = b.geometry.parameters.tube;
   const height = a.geometry.parameters.height;
   const depth = a.geometry.parameters.depth;
-  return Math.abs(distance - radius) < depth && Math.abs(a.position.y - b.position.y) < tube/2 + height/2;
+  return (
+    Math.abs(distance - radius) < depth &&
+    Math.abs(a.position.y - b.position.y) < tube / 2 + height / 2
+  );
 }
 
 function collisionAllRing(a, collisions) {
-  return collisions.some(b => collisionRing(a, b));
+  return collisions.some((b) => collisionRing(a, b));
 }
 
 function positionCamera(cameraVector, distance) {
   camera.position.set(x, y, z);
-  camera.translateOnAxis(
-    cameraVector.normalize(), distance,
-  );
-  camera.position.y = Math.max(camera.position.y, y+0.25);
+  camera.translateOnAxis(cameraVector.normalize(), distance);
+  camera.position.y = Math.max(camera.position.y, y + 0.25);
 }
 
 function movePlatform(platform, tx, ty, tz) {
-  character.position.set(x, y-0.05, z);
+  character.position.set(x, y - 0.05, z);
   const touching = collision(character, platform);
   const toMove = [];
-  let otherEnemies = enemies.map(x => x).concat(bosses.map(x => x)).concat(jumpingEnemies.map(x => x));
+  let otherEnemies = enemies
+    .map((x) => x)
+    .concat(bosses.map((x) => x))
+    .concat(jumpingEnemies.map((x) => x));
   for (let enemy of otherEnemies) {
     enemy.position.y -= 0.05;
     if (collision(enemy, platform)) {
@@ -710,7 +825,7 @@ function movePlatform(platform, tx, ty, tz) {
 function move(tx, ty, tz) {
   if (tx == 0 && ty == 0 && tz == 0) return;
   for (let i = 0; i < 6; i++) {
-    character.position.set(x+(tx/5), y+(ty/5), z+(tz/5));
+    character.position.set(x + tx / 5, y + ty / 5, z + tz / 5);
     if (!collisionAll(character, collisions)) {
       x += tx / 5;
       y += ty / 5;
@@ -746,7 +861,7 @@ function moveOnAxis(tx, tz) {
   zVel = Math.min(zVel, 0.15 / Math.sqrt(2));
 }
 
-function enemyLogic(enemy, maxDist=null, speed=null) {
+function enemyLogic(enemy, maxDist = null, speed = null) {
   maxDist = maxDist || !lighting ? 15 : 3;
   speed = speed || 0.055;
   let distance = enemy.position.distanceTo(character.position);
@@ -759,19 +874,21 @@ function enemyLogic(enemy, maxDist=null, speed=null) {
       .subVectors(character.position, enemy.position)
       .normalize()
       .multiplyScalar(0.5);
-    while (!collisionAllPoint(enemy, sightCollisions) && !collision(enemy, character)) {
+    while (
+      !collisionAllPoint(enemy, sightCollisions) &&
+      !collision(enemy, character)
+    ) {
       enemy.position.add(moveVec);
     }
-    
+
     if (collision(enemy, character)) {
       if (tutorial == "Go around corners to hide from enemies") tutorial = "";
-      moveVec = moveVec.normalize()
-        .multiplyScalar(Math.min(speed, distance));
+      moveVec = moveVec.normalize().multiplyScalar(Math.min(speed, distance));
       enemy.position.set(tempx, tempy, tempz);
       enemy.position.add(moveVec);
 
-      let tx = enemy.position.x-tempx;
-      let tz = enemy.position.z-tempz;
+      let tx = enemy.position.x - tempx;
+      let tz = enemy.position.z - tempz;
       enemy.position.set(tempx, tempy, tempz);
       enemy.rotation.set(0, 0, 0);
       moveEnemy(enemy, tx, 0);
@@ -783,16 +900,21 @@ function enemyLogic(enemy, maxDist=null, speed=null) {
 }
 
 function moveEnemy(enemy, tx, tz) {
-  let otherEnemies = enemies.map(x => x).concat(bosses.map(x => x)).concat(jumpingEnemies.map(x => x));
+  let otherEnemies = enemies
+    .map((x) => x)
+    .concat(bosses.map((x) => x))
+    .concat(jumpingEnemies.map((x) => x));
   otherEnemies.splice(otherEnemies.indexOf(enemy), 1);
   let ex = enemy.position.x;
   let ey = enemy.position.y;
   let ez = enemy.position.z;
-  
+
   for (let i = 0; i < 4; i++) {
-    enemy.position.set(ex+(tx/3), ey, ez+(tz/3));
-    if (!(collisionAll(enemy, collisions) || collisionAll(enemy, otherEnemies))) {
-      enemy.position.y -= 0.05
+    enemy.position.set(ex + tx / 3, ey, ez + tz / 3);
+    if (
+      !(collisionAll(enemy, collisions) || collisionAll(enemy, otherEnemies))
+    ) {
+      enemy.position.y -= 0.05;
       if (collisionAll(enemy, collisions)) {
         ex += tx / 3;
         ez += tz / 3;
@@ -802,56 +924,115 @@ function moveEnemy(enemy, tx, tz) {
   enemy.position.set(ex, ey, ez);
 }
 
-function smartEnemyLogic(enemy, maxDist=null, speed=null, setpos=null, jumping=false, ls=null, sensitiveEdge=false, moveAgainstWall=false) {
+function smartEnemyLogic(
+  enemy,
+  maxDist = null,
+  speed = null,
+  setpos = null,
+  jumping = false,
+  ls = null,
+  sensitiveEdge = false,
+  moveAgainstWall = false,
+) {
   speed = speed || 0.065;
   const res = canSmartEnemySee(enemy, maxDist);
-  const distance = !setpos ? (!ls || res.cansee ? res.distance : enemy.position.distanceTo(ls)) : enemy.position.distanceTo(setpos);
+  const distance = !setpos
+    ? !ls || res.cansee
+      ? res.distance
+      : enemy.position.distanceTo(ls)
+    : enemy.position.distanceTo(setpos);
   if (!!setpos || !!ls || res.cansee) {
     const tempx = enemy.position.x;
     const tempy = enemy.position.y;
     const tempz = enemy.position.z;
     enemy.lookAt(
-      !!setpos ? setpos.x : ((!!ls && !res.cansee) ? ls.x : character.position.x),
+      !!setpos ? setpos.x : !!ls && !res.cansee ? ls.x : character.position.x,
       tempy,
-      !!setpos ? setpos.z : ((!!ls && !res.cansee) ? ls.z : character.position.z),
+      !!setpos ? setpos.z : !!ls && !res.cansee ? ls.z : character.position.z,
     );
     enemy.translateZ(Math.min(speed, distance));
-    const tx = enemy.position.x-tempx;
-    const tz = enemy.position.z-tempz;
+    const tx = enemy.position.x - tempx;
+    const tz = enemy.position.z - tempz;
     enemy.position.set(tempx, tempy, tempz);
     enemy.rotation.set(0, 0, 0);
     const edgex = moveSmartEnemy(enemy, tx, 0, jumping);
     const edgez = moveSmartEnemy(enemy, 0, tz, jumping);
-    if (moveAgainstWall && Math.abs(tempx - enemy.position.x) < tx / 2 && tz < speed / 2) {
-      moveSmartEnemy(enemy, 0, tz / Math.abs(tz) * speed / 4 * 3, jumping);
-    } else if (moveAgainstWall && Math.abs(tempz - enemy.position.z) < tz / 2 && tx < speed / 2) {
-      moveSmartEnemy(enemy, tx / Math.abs(tx) * speed /4 * 3, 0, jumping);
+    if (
+      moveAgainstWall &&
+      Math.abs(tempx - enemy.position.x) < tx / 2 &&
+      tz < speed / 2
+    ) {
+      moveSmartEnemy(
+        enemy,
+        0,
+        (((tz / Math.abs(tz)) * speed) / 4) * 3,
+        jumping,
+      );
+    } else if (
+      moveAgainstWall &&
+      Math.abs(tempz - enemy.position.z) < tz / 2 &&
+      tx < speed / 2
+    ) {
+      moveSmartEnemy(
+        enemy,
+        (((tx / Math.abs(tx)) * speed) / 4) * 3,
+        0,
+        jumping,
+      );
     }
-    return {edge: sensitiveEdge ? edgex || edgez : (edgex || (edgez && tx < speed / 5)) && (edgez || (edgex && tz < speed / 5)), cansee: res.cansee};
+    return {
+      edge: sensitiveEdge
+        ? edgex || edgez
+        : (edgex || (edgez && tx < speed / 5)) &&
+          (edgez || (edgex && tz < speed / 5)),
+      cansee: res.cansee,
+    };
   }
-  return {edge: false, cansee: false};
+  return { edge: false, cansee: false };
 }
 
-function smartEnemyLogic2(enemy, maxDist=null, speed=null) {
-  const prevDist = enemy.position.distanceTo(character.position)
+function smartEnemyLogic2(enemy, maxDist = null, speed = null) {
+  const prevDist = enemy.position.distanceTo(character.position);
   const tempx = enemy.position.x;
   const tempy = enemy.position.y;
   const tempz = enemy.position.z;
-  const cansee = smartEnemyLogic(enemy, maxDist, speed, null, false, !enemy.userData.seen ? null : {x: enemy.userData.lsx, y: enemy.position.y, z: enemy.userData.lsz}, false, true).cansee;
+  const cansee = smartEnemyLogic(
+    enemy,
+    maxDist,
+    speed,
+    null,
+    false,
+    !enemy.userData.seen
+      ? null
+      : { x: enemy.userData.lsx, y: enemy.position.y, z: enemy.userData.lsz },
+    false,
+    true,
+  ).cansee;
   if (cansee) {
-    const pchasedistance = enemy.position.distanceTo(character.position) - prevDist;
+    const pchasedistance =
+      enemy.position.distanceTo(character.position) - prevDist;
     const pchasex = enemy.position.x;
     const pchasey = enemy.position.y;
     const pchasez = enemy.position.z;
-    
+
     enemy.position.x = tempx;
     enemy.position.y = tempy;
     enemy.position.z = tempz;
 
-    smartEnemyLogic(enemy, maxDist, speed, {x: enemy.userData.lsx, y: enemy.position.y, z: enemy.userData.lsz}, false, null, false, true).cansee;
-    const lschasedistance = enemy.position.distanceTo(character.position) - prevDist;
+    smartEnemyLogic(
+      enemy,
+      maxDist,
+      speed,
+      { x: enemy.userData.lsx, y: enemy.position.y, z: enemy.userData.lsz },
+      false,
+      null,
+      false,
+      true,
+    ).cansee;
+    const lschasedistance =
+      enemy.position.distanceTo(character.position) - prevDist;
 
-    if (/*!enemy.userData.seen || pchasedistance < lschasedistance*/true) {
+    if (/*!enemy.userData.seen || pchasedistance < lschasedistance*/ true) {
       enemy.position.x = pchasex;
       enemy.position.y = pchasey;
       enemy.position.z = pchasez;
@@ -866,7 +1047,16 @@ function jumpingEnemyLogic(enemy) {
   let res;
   let characterTouchingGround;
   if (enemy.userData.stage == 0) {
-    res = smartEnemyLogic(enemy, null, 0.04, null, false, !enemy.userData.seen ? null : {x: enemy.userData.lsx, y: enemy.position.y, z: enemy.userData.lsz});
+    res = smartEnemyLogic(
+      enemy,
+      null,
+      0.04,
+      null,
+      false,
+      !enemy.userData.seen
+        ? null
+        : { x: enemy.userData.lsx, y: enemy.position.y, z: enemy.userData.lsz },
+    );
     if (res.cansee) {
       enemy.userData.timeChasing += 1;
     } else {
@@ -877,27 +1067,54 @@ function jumpingEnemyLogic(enemy) {
     updateGravity(enemy);
 
     let characterTouchingGround = false;
-    if (character.position.distanceTo({x: enemy.userData.tx, y: character.position.y, z: enemy.userData.tz}) < 2 &&  enemy.position.y > y) {
+    if (
+      character.position.distanceTo({
+        x: enemy.userData.tx,
+        y: character.position.y,
+        z: enemy.userData.tz,
+      }) < 2 &&
+      enemy.position.y > y
+    ) {
       character.position.y -= 0.05;
       characterTouchingGround = collisionAll(character, collisions);
       character.position.y += 0.05;
 
       if (characterTouchingGround) {
-        smartEnemyLogic(enemy, null, 0.085, {x: x, y: enemy.position.y, z: z}, true);
+        smartEnemyLogic(
+          enemy,
+          null,
+          0.085,
+          { x: x, y: enemy.position.y, z: z },
+          true,
+        );
       }
-    } 
-    
-    if (!characterTouchingGround) {
-      smartEnemyLogic(enemy, null, 0.085, {x: enemy.userData.tx, y: enemy.position.y, z: enemy.userData.tz}, true);
     }
-    
+
+    if (!characterTouchingGround) {
+      smartEnemyLogic(
+        enemy,
+        null,
+        0.085,
+        { x: enemy.userData.tx, y: enemy.position.y, z: enemy.userData.tz },
+        true,
+      );
+    }
+
     enemy.position.y -= 0.05;
     const touchingGround = collisionAll(enemy, collisions);
     const bounce = collisionAll(enemy, trampolines);
     enemy.position.y += 0.05;
     if (touchingGround && !bounce) {
       enemy.userData.stage = 2;
-      addRing("darkblue", enemy.position.x, enemy.position.y - 0.3, enemy.position.z, 0.05, 0.1, rings);
+      addRing(
+        "darkblue",
+        enemy.position.x,
+        enemy.position.y - 0.3,
+        enemy.position.z,
+        0.05,
+        0.1,
+        rings,
+      );
     } else if (bounce) {
       enemy.userData.stage = 3;
       enemy.userData.gravity = -4;
@@ -905,7 +1122,15 @@ function jumpingEnemyLogic(enemy) {
   } else if (enemy.userData.stage == 2) {
     enemy.userData.timeChasing += 1;
     if (enemy.userData.timeChasing == 60) {
-      addRing("darkblue", enemy.position.x, enemy.position.y - 0.3, enemy.position.z, 0.05, 0.1, rings);
+      addRing(
+        "darkblue",
+        enemy.position.x,
+        enemy.position.y - 0.3,
+        enemy.position.z,
+        0.05,
+        0.1,
+        rings,
+      );
     } else if (enemy.userData.timeChasing > 90) {
       enemy.userData.timeChasing = 0;
       enemy.userData.stage = 0;
@@ -918,25 +1143,51 @@ function jumpingEnemyLogic(enemy) {
     enemy.position.y += 0.05;
     if (touchingGround && !bounce) {
       enemy.userData.stage = 2;
-      addRing("darkblue", enemy.position.x, enemy.position.y - 0.3, enemy.position.z, 0.05, 0.1, rings);
+      addRing(
+        "darkblue",
+        enemy.position.x,
+        enemy.position.y - 0.3,
+        enemy.position.z,
+        0.05,
+        0.1,
+        rings,
+      );
     } else if (bounce) {
-      checkJump(enemy, {cansee: canSmartEnemySee(enemy, null).cansee, edge: false}, true);
+      checkJump(
+        enemy,
+        { cansee: canSmartEnemySee(enemy, null).cansee, edge: false },
+        true,
+      );
       if (enemy.userData.stage == 3) {
         enemy.userData.gravity = -4;
       }
     }
   }
-  
-  if (enemy.userData.stage == 0 && res ? res.cansee : canSmartEnemySee(enemy, enemy.userData.stage == 1 ? 20 : 15).cansee) {
+
+  if (
+    enemy.userData.stage == 0 && res
+      ? res.cansee
+      : canSmartEnemySee(enemy, enemy.userData.stage == 1 ? 20 : 15).cansee
+  ) {
     enemy.userData.seen = true;
     enemy.userData.lsx = x;
     enemy.userData.lsy = y;
     enemy.userData.lsz = z;
-    
-    character.position.set(x, y-0.2, z);
+
+    character.position.set(x, y - 0.2, z);
     characterTouchingGround = collisionAll(character, collisions);
     character.position.set(x, y, z);
-    if (characterTouchingGround && ((enemy.userData.stage == 1 ? new THREE.Vector3(enemy.userData.tx, enemy.userData.ty, enemy.userData.tz) : enemy.position)).distanceTo(character.position) < 20) {
+    if (
+      characterTouchingGround &&
+      (enemy.userData.stage == 1
+        ? new THREE.Vector3(
+            enemy.userData.tx,
+            enemy.userData.ty,
+            enemy.userData.tz,
+          )
+        : enemy.position
+      ).distanceTo(character.position) < 20
+    ) {
       enemy.userData.lsgx = x;
       enemy.userData.lsgy = y;
       enemy.userData.lsgz = z;
@@ -955,31 +1206,66 @@ function jumpingEnemyLogic(enemy) {
   }
 }
 
-function checkJump(enemy, res, always=false) {
-  if (res.edge || enemy.userData.timeChasing > 120 || Math.abs(res.cansee ? y : enemy.userData.lsgy) - enemy.position.y > 0.25 || always) {
+function checkJump(enemy, res, always = false) {
+  if (
+    res.edge ||
+    enemy.userData.timeChasing > 120 ||
+    Math.abs(res.cansee ? y : enemy.userData.lsgy) - enemy.position.y > 0.25 ||
+    always
+  ) {
     if (res.cansee) {
-      character.position.set(x, y-0.05, z);
+      character.position.set(x, y - 0.05, z);
       const characterTouchingGround = collisionAll(character, collisions);
       character.position.set(x, y, z);
       if (characterTouchingGround) {
-        setJumpingEnemyTarget(enemy, x, y, z)
+        setJumpingEnemyTarget(enemy, x, y, z);
       }
     } else if (enemy.userData.seen) {
       let jump = true;
-      if (!(enemy.userData.timeChasing > 120 || Math.abs(res.cansee ? y : enemy.userData.lsgy) - enemy.position.y > 0.25 || always)) {
+      if (
+        !(
+          enemy.userData.timeChasing > 120 ||
+          Math.abs(res.cansee ? y : enemy.userData.lsgy) - enemy.position.y >
+            0.25 ||
+          always
+        )
+      ) {
         const tempx = enemy.position.x;
         const tempy = enemy.position.y;
         const tempz = enemy.position.z;
-        jump = smartEnemyLogic(enemy, null, null, {x: enemy.userData.lsgx, y: enemy.userData.lsgy, z: enemy.userData.lsgz}, false, null, true).edge;
+        jump = smartEnemyLogic(
+          enemy,
+          null,
+          null,
+          {
+            x: enemy.userData.lsgx,
+            y: enemy.userData.lsgy,
+            z: enemy.userData.lsgz,
+          },
+          false,
+          null,
+          true,
+        ).edge;
         enemy.position.x = tempx;
         enemy.position.y = tempy;
         enemy.position.z = tempz;
       }
-      
+
       if (jump) {
-        const distEnemyLsg = enemy.position.distanceTo(new THREE.Vector3(enemy.userData.lsgx, enemy.position.y, enemy.userData.lsgz));
+        const distEnemyLsg = enemy.position.distanceTo(
+          new THREE.Vector3(
+            enemy.userData.lsgx,
+            enemy.position.y,
+            enemy.userData.lsgz,
+          ),
+        );
         if (distEnemyLsg > 2 && distEnemyLsg < 21) {
-          setJumpingEnemyTarget(enemy, enemy.userData.lsgx, enemy.userData.lsgy, enemy.userData.lsgz)
+          setJumpingEnemyTarget(
+            enemy,
+            enemy.userData.lsgx,
+            enemy.userData.lsgy,
+            enemy.userData.lsgz,
+          );
         }
       }
     }
@@ -1014,7 +1300,7 @@ function setJumpingEnemyTarget(enemy, x, y, z) {
   enemy.userData.tz = z;
 }
 
-function canSmartEnemySee(enemy, maxDist=null) {
+function canSmartEnemySee(enemy, maxDist = null) {
   maxDist = maxDist || (!lighting ? 15 : 3);
   const distance = enemy.position.distanceTo(character.position);
   if (distance < maxDist) {
@@ -1025,25 +1311,33 @@ function canSmartEnemySee(enemy, maxDist=null) {
       .subVectors(character.position, enemy.position)
       .normalize()
       .multiplyScalar(0.5);
-    while (!collisionAllPoint(enemy, sightCollisions) && !collision(enemy, character))
+    while (
+      !collisionAllPoint(enemy, sightCollisions) &&
+      !collision(enemy, character)
+    )
       enemy.position.add(moveVec);
-    const res = {cansee: collision(enemy, character), distance: distance};
+    const res = { cansee: collision(enemy, character), distance: distance };
     enemy.position.set(tempx, tempy, tempz);
     return res;
   }
-  return {cansee: false, distance: distance};
+  return { cansee: false, distance: distance };
 }
 
-function moveSmartEnemy(enemy, tx, tz, jumping=false) {
-  let otherEnemies = enemies.map(x => x).concat(bosses.map(x => x)).concat(jumpingEnemies.map(x => x));
+function moveSmartEnemy(enemy, tx, tz, jumping = false) {
+  let otherEnemies = enemies
+    .map((x) => x)
+    .concat(bosses.map((x) => x))
+    .concat(jumpingEnemies.map((x) => x));
   otherEnemies.splice(otherEnemies.indexOf(enemy), 1);
   let ex = enemy.position.x;
   let ey = enemy.position.y;
   let ez = enemy.position.z;
   for (let i = 0; i < 6; i++) {
-    enemy.position.set(ex+(tx/5), ey, ez+(tz/5));
-    if (!(collisionAll(enemy, collisions) || collisionAll(enemy, otherEnemies))) {
-      enemy.position.y -= 0.05
+    enemy.position.set(ex + tx / 5, ey, ez + tz / 5);
+    if (
+      !(collisionAll(enemy, collisions) || collisionAll(enemy, otherEnemies))
+    ) {
+      enemy.position.y -= 0.05;
       if (jumping || collisionAll(enemy, collisions)) {
         ex += tx / 5;
         ez += tz / 5;
@@ -1066,7 +1360,8 @@ function respawn() {
   tutorial = tmpTutorial;
   y = 4;
   character.position.set(x, y, z);
-  if (tutorial == "Go back to the start to finish") tutorial = "Collect all the keys to complete the level";
+  if (tutorial == "Go back to the start to finish")
+    tutorial = "Collect all the keys to complete the level";
   if (level == 2) tutorial = "Go around corners to hide from enemies";
   if (level == 3) tutorial = "";
   if (level == 4) tutorial = "Escape the dungeon without being caught";
@@ -1080,7 +1375,13 @@ function nextLevel() {
   startOfAttempt = (Date.now() - startOfAttempt) / 1000;
   document.getElementById("leaderboard").className = "post";
   localStorage.setItem("level", level === MAX_LEVEL ? 1 : level + 1);
-  localStorage.setItem("levelUnlocked", Math.min(Math.max(level + 1, localStorage.getItem("levelUnlocked")), MAX_LEVEL));
+  localStorage.setItem(
+    "levelUnlocked",
+    Math.min(
+      Math.max(level + 1, localStorage.getItem("levelUnlocked")),
+      MAX_LEVEL,
+    ),
+  );
   controls.unlock();
 }
 
@@ -1088,7 +1389,13 @@ function skipLevel(inSelection) {
   const currentLvl = inSelection ? levelSelected : level;
   level = currentLvl === MAX_LEVEL ? 1 : currentLvl + 1;
   localStorage.setItem("level", level);
-  localStorage.setItem("levelUnlocked", Math.min(Math.max(currentLvl + 1, localStorage.getItem("levelUnlocked")), MAX_LEVEL));
+  localStorage.setItem(
+    "levelUnlocked",
+    Math.min(
+      Math.max(currentLvl + 1, localStorage.getItem("levelUnlocked")),
+      MAX_LEVEL,
+    ),
+  );
   setup(level);
   if (locked) {
     controls.unlock();
@@ -1101,20 +1408,22 @@ function skipLevel(inSelection) {
 function frame() {
   if (locked) {
     if (keysPressed.has("Space")) {
-      character.position.set(x, y-0.05, z);
-      if (collisionAll(character, platforms)
-          || collisionAll(character, movingX)
-          || collisionAll(character, movingY)
-          || collisionAll(character, movingZ)
-          || collisionAll(character, unstables)
-          || collisionAll(character, falling)
-          || collisionAll(character, ices)
-         ) {
+      character.position.set(x, y - 0.05, z);
+      if (
+        collisionAll(character, platforms) ||
+        collisionAll(character, movingX) ||
+        collisionAll(character, movingY) ||
+        collisionAll(character, movingZ) ||
+        collisionAll(character, unstables) ||
+        collisionAll(character, falling) ||
+        collisionAll(character, ices)
+      ) {
         gravity = -1.5;
       }
-      if (tutorial == "Press Space to jump") tutorial = "Collect all the keys to complete the level";
+      if (tutorial == "Press Space to jump")
+        tutorial = "Collect all the keys to complete the level";
     }
-    
+
     const placeholder = y;
     let bounce = false;
     gravity += 0.05;
@@ -1143,13 +1452,13 @@ function frame() {
 
     tick += 1;
     for (let moveX of movingX) {
-      movePlatform(moveX, (tick % 500) < 250 ? -0.05 : 0.05, 0, 0);
+      movePlatform(moveX, tick % 500 < 250 ? -0.05 : 0.05, 0, 0);
     }
     for (let moveY of movingY) {
-      movePlatform(moveY, 0, (tick % 250) < 125 ? 0.05 : -0.05, 0);
+      movePlatform(moveY, 0, tick % 250 < 125 ? 0.05 : -0.05, 0);
     }
     for (let moveZ of movingZ) {
-      movePlatform(moveZ, 0, 0, (tick % 500) < 250 ? 0.05 : -0.05);
+      movePlatform(moveZ, 0, 0, tick % 500 < 250 ? 0.05 : -0.05);
     }
 
     for (let teleporter of teleporters) {
@@ -1161,10 +1470,10 @@ function frame() {
         gravity = 0;
       }
     }
-    
+
     const toConvert = [];
     for (let unstable of unstables) {
-      character.position.set(x, y-0.05, z);
+      character.position.set(x, y - 0.05, z);
       if (collision(character, unstable)) {
         toConvert.push(unstable);
       }
@@ -1174,16 +1483,17 @@ function frame() {
       unstables.splice(unstables.indexOf(unstable), 1);
       unstable.userData.isStill = false;
       falling.push(unstable);
-      if (tutorial == "Escape the dungeon without being caught") tutorial = "Unstable platforms collapse when stood on";
+      if (tutorial == "Escape the dungeon without being caught")
+        tutorial = "Unstable platforms collapse when stood on";
     }
-    
+
     for (let fall of falling) {
       movePlatform(fall, 0, -0.025, 0);
     }
     for (let slowFall of slowFalling) {
       movePlatform(slowFall, 0, -0.005, 0);
     }
-  
+
     let xMov = 0;
     let zMov = 0;
     if (keysPressed.has("ArrowUp") || keysPressed.has("KeyW")) {
@@ -1199,15 +1509,15 @@ function frame() {
       xMov -= 0.1;
     }
     if (Math.abs(xMov) == 0.1 && Math.abs(zMov) == 0.1) {
-      xMov *= 1/Math.sqrt(2);
-      zMov *= 1/Math.sqrt(2);
+      xMov *= 1 / Math.sqrt(2);
+      zMov *= 1 / Math.sqrt(2);
     }
 
     xVel *= 0.96;
     zVel *= 0.96;
-    character.position.set(x, y-0.05, z);
+    character.position.set(x, y - 0.05, z);
     if (collisionAll(character, ices)) {
-      move(xVel/1.5, 0, zVel/1.5);
+      move(xVel / 1.5, 0, zVel / 1.5);
       xMov *= 0.3;
       zMov *= 0.3;
     } else {
@@ -1218,11 +1528,12 @@ function frame() {
 
     moveOnAxis(xMov, zMov);
     if (!(xMov == 0 && zMov == 0)) {
-      if (tutorial == "Press the Arrow Keys/WASD to move") tutorial = "Press Space to jump";
+      if (tutorial == "Press the Arrow Keys/WASD to move")
+        tutorial = "Press Space to jump";
     }
     //xVel *= 0.875;
     //zVel *= 0.875;
-  
+
     for (let key of keys) {
       if (collision(character, key)) {
         removeObject(key);
@@ -1243,8 +1554,13 @@ function frame() {
 
         if (keysCount == keysGoal && level !== 5) {
           addPlatform("darkorange", 0, 1, 0, 0.4, 0.4, 0.4, keys, false, false);
-          if (tutorial == "Collect all the keys to complete the level" || tutorial == "Unstable platforms collapse when stood on" || level == 3) tutorial = "Go back to the start to finish";
-        } else if (keysCount === keysGoal+1 && level !== 5) {
+          if (
+            tutorial == "Collect all the keys to complete the level" ||
+            tutorial == "Unstable platforms collapse when stood on" ||
+            level == 3
+          )
+            tutorial = "Go back to the start to finish";
+        } else if (keysCount === keysGoal + 1 && level !== 5) {
           nextLevel();
         } else if (level === 5 && bossWave === 4) {
           let platform = platforms[4];
@@ -1255,21 +1571,26 @@ function frame() {
         }
       }
     }
-    
-    if (keysPressed.has("AltLeft") && keysPressed.has("KeyF") && keysPressed.has("Digit4")) skipLevel(false);
+
+    if (
+      keysPressed.has("AltLeft") &&
+      keysPressed.has("KeyF") &&
+      keysPressed.has("Digit4")
+    )
+      skipLevel(false);
 
     for (let enemy of enemies) {
       enemyLogic(enemy); // Cube parkour 2 uses smartEnemyLogic2
     }
 
     for (let enemy of jumpingEnemies) {
-      jumpingEnemyLogic(enemy)
+      jumpingEnemyLogic(enemy);
     }
-    
+
     if (collisionAll(character, triggers) && !bossFightStarted) {
       for (let fall of falling) removeObject(fall);
       falling.splice(0, falling.length);
-      
+
       if (bossTick == 0) {
         addPlatform("darkorange", 0, 1, 0, 0.4, 0.4, 0.4, keys);
       }
@@ -1281,9 +1602,9 @@ function frame() {
       bossTick += 1;
       for (let boss of bosses) {
         if (bossTick > 50) {
-          if ((bossTick - 49) < 500) {
+          if (bossTick - 49 < 500) {
             enemyLogic(boss, Infinity, 0.04);
-          } else if ((bossTick - 49) < 700) {
+          } else if (bossTick - 49 < 700) {
             character.position.set(0, 2, 30);
             if (character.position.distanceTo(boss.position) > 0.1) {
               enemyLogic(boss, Infinity, 0.05);
@@ -1291,16 +1612,22 @@ function frame() {
               boss.position.set(0, 2.001, 30);
             }
             character.position.set(x, y, z);
-          } else if ((bossTick - 49) < 1900) {
-            if ((bossTick - 749) % (bossWave < 3 ? 60 : 50) === (bossWave < 3 ? 55 : 45)) {
+          } else if (bossTick - 49 < 1900) {
+            if (
+              (bossTick - 749) % (bossWave < 3 ? 60 : 50) ===
+              (bossWave < 3 ? 55 : 45)
+            ) {
               addRing("darkblue", 0, 0.5, 30, 0.1, 0.2, rings);
             }
-            if ((bossTick - 749) % (bossWave < 3 ? 60 : 50) < (bossWave < 3 ? 30 : 25)) {
+            if (
+              (bossTick - 749) % (bossWave < 3 ? 60 : 50) <
+              (bossWave < 3 ? 30 : 25)
+            ) {
               boss.position.y += bossWave < 3 ? 0.1 : 0.085;
             } else {
               boss.position.y -= bossWave < 3 ? 0.1 : 0.085;
             }
-          } else if ((bossTick - 49) == 1900) {
+          } else if (bossTick - 49 == 1900) {
             boss.position.set(0, 2.001, 30);
             if (bossWave == 1) {
               addPlatform(0x361704, 15, 0, 30, 1.5, 1, 1.5, unstables);
@@ -1341,153 +1668,183 @@ function frame() {
       }
     }
 
-    if (tutorial === "Thanks for playing!" && slowFalling[0].position.y < -5) nextLevel();
+    if (tutorial === "Thanks for playing!" && slowFalling[0].position.y < -5)
+      nextLevel();
 
     for (let ring of rings) {
       const radius = ring.geometry.parameters.radius;
       const tube = ring.geometry.parameters.tube;
       ring.geometry.dispose();
-      ring.geometry = new THREE.TorusGeometry(radius + 0.1, radius < 18.5 ? tube : tube - 0.005, 16, 100);
+      ring.geometry = new THREE.TorusGeometry(
+        radius + 0.1,
+        radius < 18.5 ? tube : tube - 0.005,
+        16,
+        100,
+      );
       //ring.geometry = new THREE.TorusGeometry(radius + 0.1, tube, 16, 50);
       if (radius > 20) {
         removeObject(ring);
         rings.splice(rings.indexOf(ring), 1);
       }
     }
-  
-    if (y < -50 || collisionAll(character, enemies.concat(bosses.concat(jumpingEnemies))) || collisionAll(character, lava) || collisionAllRing(character, rings)) respawn();
-  
+
+    if (
+      y < -50 ||
+      collisionAll(character, enemies.concat(bosses.concat(jumpingEnemies))) ||
+      collisionAll(character, lava) ||
+      collisionAllRing(character, rings)
+    )
+      respawn();
+
     doRender = true;
   }
 
   if (location != renderedLocation) doUIRender = true;
   if (locked && tutorial != renderedTutorial) doUIRender = true;
-  
+
   if (doUIRender) {
     if (location == "playing") {
       ctx.clearRect(0, 0, width, height);
       ctx.fillStyle = "#ffffff";
       if (keysGoal != 0) {
         ctx.textAlign = "left";
-        ctx.fillText("Keys: "+keysCount+"/"+(keysGoal+(level == 5 ? 1 : 0)), 30, 50);
+        ctx.fillText(
+          "Keys: " + keysCount + "/" + (keysGoal + (level == 5 ? 1 : 0)),
+          30,
+          50,
+        );
       }
       ctx.textAlign = "right";
-      ctx.fillText("Level "+level, width-30, 50);
+      ctx.fillText("Level " + level, width - 30, 50);
       ctx.textAlign = "center";
-      ctx.fillText(tutorial, width/2, height-50);
+      ctx.fillText(tutorial, width / 2, height - 50);
     } else if (location == "pause") {
       ctx.clearRect(0, 0, width, height);
-      
+
       ctx.textAlign = "center";
       ctx.font = `70px "${FONT_NAME}"`;
       for (let i = 0.5; i < 5; i += 0.1) {
         ctx.beginPath();
         ctx.fillStyle = "#cc0000";
-        ctx.rect(width/2+i-180, height/2+i-70, 15, 15);
+        ctx.rect(width / 2 + i - 180, height / 2 + i - 70, 15, 15);
         ctx.fill();
-        
+
         ctx.beginPath();
         ctx.fillStyle = "#000794";
-        ctx.rect(width/2+i+25, height/2+i-60, 15, 15);
+        ctx.rect(width / 2 + i + 25, height / 2 + i - 60, 15, 15);
         ctx.fill();
       }
       ctx.fillStyle = "#ffffff";
-      ctx.fillText("Cube Parkour", width/2, height/2);
-      
+      ctx.fillText("Cube Parkour", width / 2, height / 2);
+
       ctx.beginPath();
       ctx.fillStyle = "red";
-      ctx.rect(width/2-180, height/2-70, 15, 15);
+      ctx.rect(width / 2 - 180, height / 2 - 70, 15, 15);
       ctx.fill();
 
       ctx.beginPath();
       ctx.fillStyle = "blue";
-      ctx.rect(width/2+25, height/2-60, 15, 15);
+      ctx.rect(width / 2 + 25, height / 2 - 60, 15, 15);
       ctx.fill();
-      
+
       ctx.fillStyle = "#ffffff";
       ctx.font = `35px "${FONT_NAME}"`;
 
       if (!iframe) {
-        ctx.fillText("Click anywhere to play", width/2, height-50);
+        ctx.fillText("Click anywhere to play", width / 2, height - 50);
         ctx.font = `35px "${FONT_NAME}"`;
         ctx.textAlign = "left";
         ctx.fillText("Level Select", 30, 50);
         ctx.textAlign = "right";
-        ctx.fillText("Leaderboard", width-30, 50);
-        ctx.fillText("Music", width-30, height-70);
-        ctx.fillText("Settings", width-30, height-30);
+        ctx.fillText("Leaderboard", width - 30, 50);
+        ctx.fillText("Music", width - 30, height - 70);
+        ctx.fillText("Settings", width - 30, height - 30);
         ctx.font = `35px "${FONT_NAME}"`;
         ctx.textAlign = "center";
       } else {
-        ctx.fillText("Click anywhere to play", width/2, height-50);
+        ctx.fillText("Click anywhere to play", width / 2, height - 50);
       }
     } else if (location == "win") {
       ctx.clearRect(0, 0, width, height);
       ctx.textAlign = "center";
-      
+
       ctx.fillStyle = "#ffffff";
       ctx.font = `45px "${FONT_NAME}"`;
-      ctx.fillText("Level "+level, width/2, height/2-55);
-      
+      ctx.fillText("Level " + level, width / 2, height / 2 - 55);
+
       ctx.fillStyle = "darkgreen";
       ctx.font = `50px "${FONT_NAME}"`;
-      ctx.fillText("Completed", width/2, height/2);
-      
+      ctx.fillText("Completed", width / 2, height / 2);
+
       ctx.fillStyle = "#ffffff";
       ctx.font = `25px "${FONT_NAME}"`;
-      ctx.fillText("Attempts: "+attempts, width/2, height/2+50);
-      ctx.fillText("Time: "+startOfAttempt, width/2, height/2+75);
-      ctx.fillText("Total Time: "+start, width/2, height/2+98);
-  
-      ctx.font = `35px "${FONT_NAME}"`;
-      ctx.fillText("Click anywhere to continue", width/2, height-50);
+      ctx.fillText("Attempts: " + attempts, width / 2, height / 2 + 50);
+      ctx.fillText("Time: " + startOfAttempt, width / 2, height / 2 + 75);
+      ctx.fillText("Total Time: " + start, width / 2, height / 2 + 98);
 
+      ctx.font = `35px "${FONT_NAME}"`;
+      ctx.fillText("Click anywhere to continue", width / 2, height - 50);
     } else if (location == "posting") {
       ctx.clearRect(0, 0, width, height);
-      
+
       ctx.font = `70px "${FONT_NAME}"`;
-      ctx.fillText("Loading...", width/2, height/2);
+      ctx.fillText("Loading...", width / 2, height / 2);
     } else if (location == "select") {
       ctx.clearRect(0, 0, width, height);
-      
+
       ctx.textAlign = "center";
       ctx.font = `70px "${FONT_NAME}"`;
-      ctx.fillText("Level "+levelSelected, width/2, height/2);
-      ctx.fillStyle = levelSelected + 1 > Math.min(localStorage.getItem("levelUnlocked") || 1, MAX_LEVEL) ? "gray" : "white";
-      ctx.fillText("+", (width/2)+150, height/2);
+      ctx.fillText("Level " + levelSelected, width / 2, height / 2);
+      ctx.fillStyle =
+        levelSelected + 1 >
+        Math.min(localStorage.getItem("levelUnlocked") || 1, MAX_LEVEL)
+          ? "gray"
+          : "white";
+      ctx.fillText("+", width / 2 + 150, height / 2);
       ctx.fillStyle = levelSelected - 1 < 1 ? "gray" : "white";
-      ctx.fillText("-", (width/2)-150, height/2);
+      ctx.fillText("-", width / 2 - 150, height / 2);
       ctx.fillStyle = "white";
 
       ctx.font = `35px "${FONT_NAME}"`;
-      ctx.fillText("Leaderboard", width/2, height/2 + 50);
-      if (levelSelected == (localStorage.getItem("levelUnlocked") || 1) && levelSelected < MAX_LEVEL) {
+      ctx.fillText("Leaderboard", width / 2, height / 2 + 50);
+      if (
+        levelSelected == (localStorage.getItem("levelUnlocked") || 1) &&
+        levelSelected < MAX_LEVEL
+      ) {
         ctx.font = `33px "${FONT_NAME}"`;
-        ctx.fillText("Skip this level", width/2, height/2 + 85);
+        ctx.fillText("Skip this level", width / 2, height / 2 + 85);
       }
       ctx.font = `35px "${FONT_NAME}"`;
-      ctx.fillText("Click anywhere to exit", width/2, height-50);
+      ctx.fillText("Click anywhere to exit", width / 2, height - 50);
     } else if (location == "leaderboard") {
       ctx.clearRect(0, 0, width, height);
       let place;
       if (leaderboardItems !== null) {
         for (let i in leaderboardItems) {
-          ctx.fillText(leaderboardItems[i].username, width/2, 120 + i*30 + scrollPos);
-          place = parseInt(i)+1;
-          ctx.fillText("#"+place, width/2-250, 120 + i*30 + scrollPos);
-          ctx.fillText(leaderboardItems[i].time, width/2+250, 120 + i*30 + scrollPos);
+          ctx.fillText(
+            leaderboardItems[i].username,
+            width / 2,
+            120 + i * 30 + scrollPos,
+          );
+          place = parseInt(i) + 1;
+          ctx.fillText("#" + place, width / 2 - 250, 120 + i * 30 + scrollPos);
+          ctx.fillText(
+            leaderboardItems[i].time,
+            width / 2 + 250,
+            120 + i * 30 + scrollPos,
+          );
         }
         ctx.clearRect(0, 0, width, 75);
-        ctx.clearRect(0, height-100, width, height);
+        ctx.clearRect(0, height - 100, width, height);
       } else {
         ctx.font = `70px "${FONT_NAME}"`;
-        ctx.fillText("Loading...", width/2, height/2);
+        ctx.fillText("Loading...", width / 2, height / 2);
       }
       ctx.font = `35px "${FONT_NAME}"`;
-      ctx.fillText("Level "+levelSelected, width/2, 50);
-      ctx.fillText("-", width/2-250, 50);
-      ctx.fillText("+", width/2+250, 50);
-      ctx.fillText("Click anywhere to exit", width/2, height-50);
+      ctx.fillText("Level " + levelSelected, width / 2, 50);
+      ctx.fillText("-", width / 2 - 250, 50);
+      ctx.fillText("+", width / 2 + 250, 50);
+      ctx.fillText("Click anywhere to exit", width / 2, height - 50);
     }
 
     doUIRender = false;
@@ -1501,7 +1858,7 @@ function frame() {
 
 function render() {
   doRender = false;
-  
+
   if (lighting) {
     for (let light of playerLights) {
       scene.remove(light);
@@ -1513,13 +1870,13 @@ function render() {
   let distance = 0;
   let cameraVector = new THREE.Vector3();
   camera.position.set(x, y, z);
-  
+
   while (distance < 5.01 && !collisionAllPoint(camera, collisions)) {
     distance += 0.2;
     cameraVector.z = distance;
     positionCamera(cameraVector, distance);
   }
-  
+
   if (distance > 5.01) {
     distance = 5.01;
   } else {
@@ -1532,9 +1889,28 @@ function render() {
   distance -= 0.31;
   cameraVector.z = distance;
   positionCamera(cameraVector, distance);
-  
+
+  const cameraPos = new THREE.Vector3();
+  camera.getWorldPosition(cameraPos);
+
+  const characterPos = new THREE.Vector3();
+  character.getWorldPosition(characterPos);
+
+  let t =
+    (cameraPos.distanceTo(characterPos) - MIN_OPACITY_DIST) /
+    (MAX_OPACITY_DIST - MIN_OPACITY_DIST);
+  t = THREE.MathUtils.clamp(t, 0, 1);
+
+  const targetOpacity = Math.pow(t, 3);
+
+  character.material.opacity = THREE.MathUtils.lerp(
+    character.material.opacity,
+    targetOpacity,
+    FADE_LERP_SPEED,
+  );
+
   //if (Math.abs((camera.rotation.x/Math.PI)+0.2) < 0.02) camera.position.z -= 0.001;
-  
+
   renderer.render(scene, camera);
 }
 
@@ -1547,40 +1923,51 @@ async function postScore() {
       level: level,
       time: startOfAttempt,
     }),
-  }).then(res => res.text());
+  }).then((res) => res.text());
   window.location.href = data;
 }
 
-async function getLeaderboard(level, username=null) {
+async function getLeaderboard(level, username = null) {
   leaderboardItems = null;
   const data = await fetch(`${SERVER_URL}/get`, {
     method: "POST",
     body: JSON.stringify({
       level: level,
     }),
-  }).then(res => res.json());
+  }).then((res) => res.json());
   leaderboardItems = data;
   doUIRender = true;
   if (username !== null) {
-    scrollPos = (leaderboardItems.indexOf(leaderboardItems.find(item => item.username === username)) * -30) - 15;
-    scrollPos = Math.min(0, Math.max(height-200-(leaderboardItems.length * 30), scrollPos));
+    scrollPos =
+      leaderboardItems.indexOf(
+        leaderboardItems.find((item) => item.username === username),
+      ) *
+        -30 -
+      15;
+    scrollPos = Math.min(
+      0,
+      Math.max(height - 200 - leaderboardItems.length * 30, scrollPos),
+    );
   } else {
     scrollPos = 0;
   }
 }
 
 async function startAudio() {
-  theme.play().then(_ => {
-    setInterval(() => {
-      if (theme.currentTime > END_POS) {
-        theme.pause();
-        setTimeout(() => {
-          theme.currentTime = REPEAT_POS;
-          theme.play();
-        }, 15);
-      }
-    }, 2);
-  }).catch(_ => {})
+  theme
+    .play()
+    .then((_) => {
+      setInterval(() => {
+        if (theme.currentTime > END_POS) {
+          theme.pause();
+          setTimeout(() => {
+            theme.currentTime = REPEAT_POS;
+            theme.play();
+          }, 15);
+        }
+      }, 2);
+    })
+    .catch((_) => {});
 }
 
 async function audioLoad() {
@@ -1591,10 +1978,13 @@ async function audioLoad() {
 
 document.getElementById("leaderboard").onclick = postScore;
 
-canvas.onclick = canvasText.onclick = async event => {
+canvas.onclick = canvasText.onclick = async (event) => {
   if (!iframe) {
     if (location == "pause") {
-      if (event.clientY > 70 || (event.clientX > 240 && event.clientX < width-240)) {
+      if (
+        event.clientY > 70 ||
+        (event.clientX > 240 && event.clientX < width - 240)
+      ) {
         if (!levelStarted) {
           attempts = 1;
           start = Date.now();
@@ -1603,7 +1993,7 @@ canvas.onclick = canvasText.onclick = async event => {
         levelStarted = true;
         controls.lock();
       } else {
-        if (event.clientX - (width/2) < 0) {
+        if (event.clientX - width / 2 < 0) {
           location = "select";
           levelSelected = level;
         } else {
@@ -1619,11 +2009,17 @@ canvas.onclick = canvasText.onclick = async event => {
       location = "pause";
       document.getElementById("leaderboard").className = "post hidden";
     } else if (location == "select") {
-      if (Math.abs(event.clientY - ((height/2)-25)) < 30 && Math.abs(event.clientX - (width/2)) < 250) {
-        if (event.clientX - (width/2) > 0) {
+      if (
+        Math.abs(event.clientY - (height / 2 - 25)) < 30 &&
+        Math.abs(event.clientX - width / 2) < 250
+      ) {
+        if (event.clientX - width / 2 > 0) {
           doUIRender = true;
           levelSelected += 1;
-          if (levelSelected > Math.min(localStorage.getItem("levelUnlocked") || 1, MAX_LEVEL)) {
+          if (
+            levelSelected >
+            Math.min(localStorage.getItem("levelUnlocked") || 1, MAX_LEVEL)
+          ) {
             levelSelected -= 1;
           }
         } else {
@@ -1633,11 +2029,19 @@ canvas.onclick = canvasText.onclick = async event => {
             levelSelected += 1;
           }
         }
-      } else if (Math.abs(event.clientY - ((height/2)+30)) < 20 && Math.abs(event.clientX - (width/2)) < 100) {
+      } else if (
+        Math.abs(event.clientY - (height / 2 + 30)) < 20 &&
+        Math.abs(event.clientX - width / 2) < 100
+      ) {
         location = "leaderboard";
         getLeaderboard(levelSelected);
         scrollPos = 0;
-      } else if (Math.abs(event.clientY - ((height/2)+65)) < 20 && Math.abs(event.clientX - (width/2)) < 100 && levelSelected == (localStorage.getItem("levelUnlocked") || 1) && levelSelected < MAX_LEVEL) {
+      } else if (
+        Math.abs(event.clientY - (height / 2 + 65)) < 20 &&
+        Math.abs(event.clientX - width / 2) < 100 &&
+        levelSelected == (localStorage.getItem("levelUnlocked") || 1) &&
+        levelSelected < MAX_LEVEL
+      ) {
         skipLevel(true);
       } else {
         location = "pause";
@@ -1648,9 +2052,9 @@ canvas.onclick = canvasText.onclick = async event => {
           levelStarted = false;
         }
       }
-    } else if (location == "leaderboard")  {
-      if (event.clientY < 100 && Math.abs(event.clientX - (width/2)) < 300) {
-        if (event.clientX - (width/2) > 0) {
+    } else if (location == "leaderboard") {
+      if (event.clientY < 100 && Math.abs(event.clientX - width / 2) < 300) {
+        if (event.clientX - width / 2 > 0) {
           doUIRender = true;
           levelSelected += 1;
           if (levelSelected > MAX_LEVEL) {
@@ -1676,7 +2080,7 @@ canvas.onclick = canvasText.onclick = async event => {
   } else {
     if (IFRAME_REDIRECT !== null) window.open(IFRAME_REDIRECT);
   }
-}
+};
 
 controls.addEventListener("lock", () => {
   locked = true;
@@ -1693,38 +2097,45 @@ controls.addEventListener("unlock", () => {
   }
 });
 
-window.addEventListener("keydown", event => keysPressed.add(event.code));
-window.addEventListener("keyup", event => keysPressed.delete(event.code));
+window.addEventListener("keydown", (event) => keysPressed.add(event.code));
+window.addEventListener("keyup", (event) => keysPressed.delete(event.code));
 
-window.addEventListener("mousemove", event => {
-  if (location == "playing" && tutorial == "Move the mouse to look around") tutorial = "Press the Arrow Keys/WASD to move";
+window.addEventListener("mousemove", (event) => {
+  if (location == "playing" && tutorial == "Move the mouse to look around")
+    tutorial = "Press the Arrow Keys/WASD to move";
 });
 
-window.addEventListener("wheel", event => {
+window.addEventListener("wheel", (event) => {
   if (location == "leaderboard") {
     doUIRender = true;
-    scrollPos += event.wheelDelta/3;
-    scrollPos = Math.min(0, Math.max(height-200-(leaderboardItems.length * 30), scrollPos));
+    scrollPos += event.wheelDelta / 3;
+    scrollPos = Math.min(
+      0,
+      Math.max(height - 200 - leaderboardItems.length * 30, scrollPos),
+    );
   }
 });
 
 window.addEventListener("resize", () => {
   width = window.innerWidth;
   height = window.innerHeight;
-  
+
   camera.aspect = width / height;
-	camera.updateProjectionMatrix();
-	renderer.setSize(width, height);
+  camera.updateProjectionMatrix();
+  renderer.setSize(width, height);
   doRender = true;
   doUIRender = true;
-  
+
   canvasText.width = width;
   canvasText.height = height;
   ctx = canvasText.getContext("2d");
   ctx.fillStyle = "#ffffff";
   ctx.font = `35px "${FONT_NAME}"`;
   ctx.textAlign = "center";
-  scrollPos = Math.min(0, Math.max(height-200-(leaderboardItems.length * 30), scrollPos));
+  scrollPos = Math.min(
+    0,
+    Math.max(height - 200 - leaderboardItems.length * 30, scrollPos),
+  );
 });
 
 let x = 0;
@@ -1754,7 +2165,7 @@ let tutorial = "";
 
 let location = "pause"; // pause, playing, win, posting, leaderboard, select
 let locked = false;
-if (DEBUG) setInterval(() => console.log(location), 10)
+if (DEBUG) setInterval(() => console.log(location), 10);
 
 let levelSelected = 1;
 let scrollPos = 0;
@@ -1773,7 +2184,12 @@ let theme;
 const command = window.location.hash ? window.location.hash.substring(1) : "";
 try {
   const commands = command.split(",");
-  if (commands[0] == "leaderboard" && commands[1] && commands[2] && parseInt(commands[2])) {
+  if (
+    commands[0] == "leaderboard" &&
+    commands[1] &&
+    commands[2] &&
+    parseInt(commands[2])
+  ) {
     location = "leaderboard";
     levelSelected = parseInt(commands[2]);
     getLeaderboard(levelSelected, commands[1]);
@@ -1795,20 +2211,17 @@ function frameLoop() {
   if (FPS_CAP) {
     now = window.performance.now();
     elapsed = now - then;
-  
+
     if (elapsed > FPS_INTERVAL) {
       frame();
       then = now - (elapsed % FPS_INTERVAL);
     }
   } else {
-    frame()
+    frame();
   }
 }
 
-let font = new FontFace(
-  FONT_NAME,
-  `url(${FONT_FILE})`
-);
+let font = new FontFace(FONT_NAME, `url(${FONT_FILE})`);
 document.fonts.add(font);
 font.load();
 
