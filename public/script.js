@@ -7,7 +7,7 @@
 import * as THREE from "three";
 import { PointerLockControls } from "three/pointerlock";
 
-const IFRAME_REDIRECT = "https://cube-parkour.classfied3d.repl.co/";
+const IFRAME_REDIRECT = "https://cube-parkour.vercel.app/";
 const SERVER_URL = "https://cube-parkour-leaderboard.classfied3d.repl.co";
 
 const FONT_FILE =
