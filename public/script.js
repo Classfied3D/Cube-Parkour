@@ -226,6 +226,7 @@ function setup(level) {
   camera.rotation.x = Math.PI / 7;
   camera.rotation.y = Math.PI;
   camera.rotation.z = 0;
+  character.material.opacity = 1.0;
   doRender = true;
 
   for (let platform of platforms) removeObject(platform);
